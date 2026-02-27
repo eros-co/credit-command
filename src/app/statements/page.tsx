@@ -92,6 +92,30 @@ export default function StatementsPage() {
     // Start polling every 5 seconds
     const interval = setInterval(async () => {
       try {
+        // First, try to fetch the result from our result store (webhook may have delivered it)
+        try {
+          const resultRes = await fetch(`/api/statement-results?taskId=${taskId}`);
+          if (resultRes.ok) {
+            const resultData = await resultRes.json();
+            if (resultData.result) {
+              console.log('[Polling] Found result in result store, updating statement...');
+              setStatements(prev =>
+                prev.map(s =>
+                  s.id === stmtId
+                    ? { ...s, status: 'completed', parsed: resultData.result }
+                    : s
+                )
+              );
+              clearInterval(interval);
+              pollingRef.current.delete(stmtId);
+              return;
+            }
+          }
+        } catch (e) {
+          console.log('[Polling] Result store not available yet:', e);
+        }
+
+        // If no result in store, check task status
         const res = await fetch(`/api/manus-task-status?taskId=${taskId}`);
         const data = await res.json();
 

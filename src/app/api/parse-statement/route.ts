@@ -81,9 +81,10 @@ IMPORTANT: At the very end of your response, output the complete JSON object (wi
 
 The PDF file is attached. Please process it and provide the structured JSON output.`;
 
-    // Create the task payload
+    // Create the task payload with credit-efficient model
     const taskPayload = {
       prompt: taskInstructions,
+      model: 'gemini-2.5-flash',
       attachments: [
         {
           filename: file.name,

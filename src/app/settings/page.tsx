@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Settings, Save, RefreshCw } from 'lucide-react';
+import { Settings, Save, RefreshCw, PiggyBank, Wallet, CreditCard as CreditCardIcon } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import { formatCurrency } from '@/lib/calculations';
 
@@ -31,12 +31,12 @@ export default function SettingsPage() {
     : 0;
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6 max-w-4xl pb-10">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold">Settings</h1>
+        <h1 className="text-2xl font-bold">Financial Profile</h1>
         <p className="text-sm text-muted mt-1">
-          Configure your financial profile and system preferences
+          Configure your FNB account balances and credit goals for accurate AI advice
         </p>
       </div>
 
@@ -49,23 +49,79 @@ export default function SettingsPage() {
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs text-muted mb-1">Name</label>
+              <label className="block text-xs text-muted mb-1">Display Name</label>
               <input
                 type="text"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
+                className="w-full"
               />
             </div>
           </div>
         </div>
 
+        {/* Account Balances */}
+        <div className="card">
+          <h3 className="text-sm font-medium mb-4">FNB Account Balances</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs text-muted mb-1 flex items-center gap-1">
+                <Wallet className="w-3 h-3" /> Current/Debit (R)
+              </label>
+              <input
+                type="number"
+                value={form.debitBalance}
+                onChange={(e) =>
+                  setForm({ ...form, debitBalance: parseInt(e.target.value) || 0 })
+                }
+                min={0}
+                className="w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-muted mb-1 flex items-center gap-1">
+                <PiggyBank className="w-3 h-3" /> Savings Account (R)
+              </label>
+              <input
+                type="number"
+                value={form.savingsBalance}
+                onChange={(e) =>
+                  setForm({ ...form, savingsBalance: parseInt(e.target.value) || 0 })
+                }
+                min={0}
+                className="w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-muted mb-1 flex items-center gap-1">
+                <CreditCardIcon className="w-3 h-3" /> Credit Card Balance (R)
+              </label>
+              <input
+                type="number"
+                value={form.creditCardBalance}
+                onChange={(e) =>
+                  setForm({ ...form, creditCardBalance: parseInt(e.target.value) || 0 })
+                }
+                min={0}
+                className="w-full"
+              />
+            </div>
+          </div>
+          <div className="mt-4 p-3 rounded-lg bg-accent/5 border border-accent/10 text-sm">
+            <span className="text-muted">Total Liquidity: </span>
+            <span className="text-emerald-400 font-bold">
+              {formatCurrency(form.debitBalance + form.savingsBalance)}
+            </span>
+          </div>
+        </div>
+
         {/* Income & Expenses */}
         <div className="card">
-          <h3 className="text-sm font-medium mb-4">Income & Fixed Expenses</h3>
+          <h3 className="text-sm font-medium mb-4">Monthly Income & Rent</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs text-muted mb-1">
-                Monthly Income (R)
+                Monthly Gross Income (R)
               </label>
               <input
                 type="number"
@@ -74,14 +130,12 @@ export default function SettingsPage() {
                   setForm({ ...form, monthlyIncome: parseInt(e.target.value) || 0 })
                 }
                 min={0}
+                className="w-full"
               />
-              <p className="text-xs text-muted mt-1">
-                Your gross monthly income before deductions
-              </p>
             </div>
             <div>
               <label className="block text-xs text-muted mb-1">
-                Monthly Rent (R)
+                Monthly Rent/Bond (R)
               </label>
               <input
                 type="number"
@@ -90,25 +144,30 @@ export default function SettingsPage() {
                   setForm({ ...form, monthlyRent: parseInt(e.target.value) || 0 })
                 }
                 min={0}
+                className="w-full"
               />
-              <p className="text-xs text-muted mt-1">
-                Your monthly rental or bond payment
-              </p>
             </div>
           </div>
-          <div className="mt-4 p-3 rounded-lg bg-[#1a2332] text-sm">
-            <span className="text-muted">Disposable Income: </span>
-            <span className="text-emerald-400 font-medium">
-              {formatCurrency(disposableIncome)}
-            </span>
-            <span className="text-muted"> / month</span>
+          <div className="mt-4 p-3 rounded-lg bg-[#1a2332] text-sm flex justify-between">
+            <div>
+              <span className="text-muted">Disposable: </span>
+              <span className="text-emerald-400 font-medium">
+                {formatCurrency(disposableIncome)}
+              </span>
+            </div>
+            <div>
+              <span className="text-muted">DTI Ratio: </span>
+              <span className={`font-medium ${debtToIncomeRatio <= 36 ? 'text-emerald-400' : 'text-red-400'}`}>
+                {debtToIncomeRatio}%
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* Credit Card */}
+        {/* Credit Limits & Goals */}
         <div className="card">
-          <h3 className="text-sm font-medium mb-4">FNB Credit Card</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <h3 className="text-sm font-medium mb-4">Credit Goals</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs text-muted mb-1">
                 Credit Limit (R)
@@ -120,65 +179,9 @@ export default function SettingsPage() {
                   setForm({ ...form, creditLimit: parseInt(e.target.value) || 0 })
                 }
                 min={0}
+                className="w-full"
               />
             </div>
-            <div>
-              <label className="block text-xs text-muted mb-1">
-                Current Balance (R)
-              </label>
-              <input
-                type="number"
-                value={form.creditCardBalance}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    creditCardBalance: parseInt(e.target.value) || 0,
-                  })
-                }
-                min={0}
-              />
-            </div>
-          </div>
-          <div className="mt-4 p-3 rounded-lg bg-[#1a2332] text-sm space-y-1">
-            <div>
-              <span className="text-muted">Utilisation: </span>
-              <span
-                className={`font-medium ${
-                  form.creditLimit > 0
-                    ? Math.round((form.creditCardBalance / form.creditLimit) * 100) <= 9
-                      ? 'text-emerald-400'
-                      : Math.round((form.creditCardBalance / form.creditLimit) * 100) <= 30
-                      ? 'text-yellow-400'
-                      : 'text-red-400'
-                    : 'text-muted'
-                }`}
-              >
-                {form.creditLimit > 0
-                  ? `${Math.round((form.creditCardBalance / form.creditLimit) * 100)}%`
-                  : '0%'}
-              </span>
-            </div>
-            <div>
-              <span className="text-muted">Debt-to-Income: </span>
-              <span
-                className={`font-medium ${
-                  debtToIncomeRatio <= 30
-                    ? 'text-emerald-400'
-                    : debtToIncomeRatio <= 50
-                    ? 'text-yellow-400'
-                    : 'text-red-400'
-                }`}
-              >
-                {debtToIncomeRatio}%
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Goals */}
-        <div className="card">
-          <h3 className="text-sm font-medium mb-4">Credit Goals</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs text-muted mb-1">
                 Target Credit Score
@@ -191,6 +194,7 @@ export default function SettingsPage() {
                 }
                 min={300}
                 max={999}
+                className="w-full"
               />
             </div>
             <div>
@@ -201,6 +205,7 @@ export default function SettingsPage() {
                 type="date"
                 value={form.targetDate}
                 onChange={(e) => setForm({ ...form, targetDate: e.target.value })}
+                className="w-full"
               />
             </div>
           </div>
@@ -210,7 +215,7 @@ export default function SettingsPage() {
         <div className="flex gap-3">
           <button type="submit" className="btn-primary flex items-center gap-2">
             <Save className="w-4 h-4" />
-            {saved ? 'Saved!' : 'Save Settings'}
+            {saved ? 'Saved Successfully!' : 'Save Financial Profile'}
           </button>
           <button
             type="button"
@@ -218,7 +223,7 @@ export default function SettingsPage() {
             className="btn-secondary flex items-center gap-2"
           >
             <RefreshCw className="w-4 h-4" />
-            Reset
+            Reset Changes
           </button>
         </div>
       </form>

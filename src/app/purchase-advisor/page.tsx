@@ -6,45 +6,40 @@ import {
   CreditCard,
   Banknote,
   Clock,
-  Split,
   XCircle,
-  ArrowRight,
+  Calendar,
+  TrendingUp,
+  Info,
 } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import {
   calculateFinancialSnapshot,
   formatCurrency,
+  analyzePurchaseTimeline,
 } from '@/lib/calculations';
-import { generatePurchaseDecision } from '@/lib/ai-engine';
 import type { PurchaseDecision } from '@/lib/types';
 
 const RECOMMENDATION_CONFIG: Record<
   PurchaseDecision['recommendation'],
   { label: string; icon: React.ReactNode; color: string; bgColor: string }
 > = {
-  buy_credit: {
-    label: 'Buy on Credit',
-    icon: <CreditCard className="w-5 h-5" />,
-    color: 'text-accent',
-    bgColor: 'bg-accent/10 border-accent/30',
-  },
-  buy_cash: {
-    label: 'Buy with Cash',
+  buy_now: {
+    label: 'Buy Now',
     icon: <Banknote className="w-5 h-5" />,
     color: 'text-emerald-400',
     bgColor: 'bg-emerald-400/10 border-emerald-400/30',
+  },
+  save_and_buy: {
+    label: 'Save and Buy Later',
+    icon: <Calendar className="w-5 h-5" />,
+    color: 'text-accent',
+    bgColor: 'bg-accent/10 border-accent/30',
   },
   delay: {
     label: 'Delay Purchase',
     icon: <Clock className="w-5 h-5" />,
     color: 'text-yellow-400',
     bgColor: 'bg-yellow-400/10 border-yellow-400/30',
-  },
-  split: {
-    label: 'Split Payment',
-    icon: <Split className="w-5 h-5" />,
-    color: 'text-purple-400',
-    bgColor: 'bg-purple-400/10 border-purple-400/30',
   },
   avoid: {
     label: 'Avoid Purchase',
@@ -72,7 +67,7 @@ export default function PurchaseAdvisorPage() {
     const amt = parseFloat(amount);
     if (isNaN(amt) || !item) return;
 
-    const decision = generatePurchaseDecision(item, amt, settings, snapshot);
+    const decision = analyzePurchaseTimeline(item, amt, snapshot, settings);
     setCurrentDecision(decision);
     addPurchaseDecision(decision);
   };
@@ -87,10 +82,9 @@ export default function PurchaseAdvisorPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold">Purchase Decision Advisor</h1>
+        <h1 className="text-2xl font-bold">Purchase & Timeline Advisor</h1>
         <p className="text-sm text-muted mt-1">
-          Get AI-powered advice on whether to buy, delay, or avoid a purchase
-          based on your credit optimisation goals
+          Get a personalised savings plan and purchase timeline based on your FNB balances and credit goals
         </p>
       </div>
 
@@ -107,8 +101,9 @@ export default function PurchaseAdvisorPage() {
                 type="text"
                 value={item}
                 onChange={(e) => setItem(e.target.value)}
-                placeholder="e.g. Microwave, Laptop, Software subscription"
+                placeholder="e.g. New iPhone, Solar Inverter, Laptop"
                 required
+                className="w-full"
               />
             </div>
             <div>
@@ -119,10 +114,11 @@ export default function PurchaseAdvisorPage() {
                 type="number"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                placeholder="e.g. 3000"
+                placeholder="e.g. 15000"
                 min={0}
                 step={0.01}
                 required
+                className="w-full"
               />
             </div>
           </div>
@@ -148,20 +144,46 @@ export default function PurchaseAdvisorPage() {
             const config = RECOMMENDATION_CONFIG[currentDecision.recommendation];
             return (
               <div className={`card border ${config.bgColor}`}>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className={config.color}>{config.icon}</div>
-                  <div>
-                    <div className={`text-lg font-bold ${config.color}`}>
-                      {config.label}
-                    </div>
-                    <div className="text-xs text-muted">
-                      {currentDecision.item} — {formatCurrency(currentDecision.amount)}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={config.color}>{config.icon}</div>
+                    <div>
+                      <div className={`text-lg font-bold ${config.color}`}>
+                        {config.label}
+                      </div>
+                      <div className="text-xs text-muted">
+                        {currentDecision.item} — {formatCurrency(currentDecision.amount)}
+                      </div>
                     </div>
                   </div>
+                  {currentDecision.targetPurchaseDate && (
+                    <div className="flex items-center gap-2 bg-black/20 px-3 py-1.5 rounded-full border border-white/5">
+                      <Calendar className="w-4 h-4 text-accent" />
+                      <span className="text-sm font-medium">Target: {currentDecision.targetPurchaseDate}</span>
+                    </div>
+                  )}
                 </div>
-                <p className="text-sm leading-relaxed">
+                <p className="text-sm leading-relaxed mb-4">
                   {currentDecision.reasoning}
                 </p>
+
+                {/* Savings Plan Visualization */}
+                {currentDecision.savingsPlan && currentDecision.savingsPlan.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-white/5">
+                    <h4 className="text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-2">
+                      <TrendingUp className="w-3 h-3 text-accent" />
+                      Monthly Savings Plan
+                    </h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                      {currentDecision.savingsPlan.map((plan, idx) => (
+                        <div key={idx} className="bg-black/20 p-2 rounded border border-white/5 text-center">
+                          <div className="text-[10px] text-muted uppercase">{plan.month}</div>
+                          <div className="text-xs font-bold text-accent">{formatCurrency(plan.amount)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })()}
@@ -170,21 +192,21 @@ export default function PurchaseAdvisorPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="card">
               <h4 className="text-xs text-muted uppercase tracking-wider mb-2">
-                Credit Score Impact
+                Credit Impact
               </h4>
-              <p className="text-sm">{currentDecision.creditImpact}</p>
+              <p className="text-sm font-medium">{currentDecision.creditImpact}</p>
             </div>
             <div className="card">
               <h4 className="text-xs text-muted uppercase tracking-wider mb-2">
                 Utilisation Impact
               </h4>
-              <p className="text-sm">{currentDecision.utilisationImpact}</p>
+              <p className="text-sm font-medium">{currentDecision.utilisationImpact}</p>
             </div>
             <div className="card">
               <h4 className="text-xs text-muted uppercase tracking-wider mb-2">
                 Cash Flow Impact
               </h4>
-              <p className="text-sm">{currentDecision.cashFlowImpact}</p>
+              <p className="text-sm font-medium">{currentDecision.cashFlowImpact}</p>
             </div>
           </div>
         </div>
@@ -194,32 +216,31 @@ export default function PurchaseAdvisorPage() {
       {purchaseDecisions.length > 0 && (
         <div className="card">
           <h3 className="text-sm font-medium text-muted mb-4">
-            Decision History
+            Recent Analysis
           </h3>
           <div className="space-y-3">
-            {purchaseDecisions.slice(0, 10).map((dec) => {
+            {purchaseDecisions.slice(0, 5).map((dec) => {
               const config = RECOMMENDATION_CONFIG[dec.recommendation];
               return (
                 <div
                   key={dec.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-[#1a2332]"
+                  className="flex items-center justify-between p-3 rounded-lg bg-[#1a2332] border border-white/5"
                 >
                   <div className="flex items-center gap-3">
                     <div className={config.color}>{config.icon}</div>
                     <div>
                       <div className="text-sm font-medium">{dec.item}</div>
                       <div className="text-xs text-muted">
-                        {new Date(dec.date).toLocaleDateString('en-ZA')} —{' '}
-                        {formatCurrency(dec.amount)}
+                        Target: {dec.targetPurchaseDate} — {formatCurrency(dec.amount)}
                       </div>
                     </div>
                   </div>
-                  <span className={`badge ${
-                    dec.recommendation === 'buy_credit' || dec.recommendation === 'buy_cash'
-                      ? 'badge-green'
-                      : dec.recommendation === 'delay' || dec.recommendation === 'split'
-                      ? 'badge-yellow'
-                      : 'badge-red'
+                  <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded ${
+                    dec.recommendation === 'buy_now'
+                      ? 'bg-emerald-500/20 text-emerald-400'
+                      : dec.recommendation === 'save_and_buy'
+                      ? 'bg-accent/20 text-accent'
+                      : 'bg-red-500/20 text-red-400'
                   }`}>
                     {config.label}
                   </span>
@@ -230,17 +251,21 @@ export default function PurchaseAdvisorPage() {
         </div>
       )}
 
-      {/* Context Card */}
-      <div className="card bg-[#1a2332] border-accent/20">
-        <h4 className="text-sm font-medium mb-2">How This Works</h4>
-        <p className="text-xs text-muted leading-relaxed">
-          The Purchase Decision Advisor analyses your planned purchase against
-          your current credit utilisation, income, disposable income, and credit
-          score goals. It considers the impact on your FNB credit card
-          utilisation ratio and overall financial trajectory toward your target
-          score of {settings.targetScore}. All recommendations prioritise your
-          credit score optimisation above all else.
-        </p>
+      {/* Methodology Card */}
+      <div className="card bg-accent/5 border-accent/20">
+        <div className="flex gap-3">
+          <Info className="w-5 h-5 text-accent shrink-0" />
+          <div>
+            <h4 className="text-sm font-medium mb-1">Our Recommendation Methodology</h4>
+            <p className="text-xs text-muted leading-relaxed">
+              We analyse your <strong>FNB Current, Credit, and Savings</strong> balances to determine liquidity. 
+              Our algorithm prioritises maintaining an emergency fund (15% of cash) and calculates a 
+              <strong> 30% Savings Rate</strong> from your monthly disposable income. 
+              Recommendations are designed to reach your <strong>740 credit score goal</strong> by avoiding 
+              high credit card utilisation.
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );

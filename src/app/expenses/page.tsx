@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   CheckCircle,
   ArrowRight,
+  Zap,
 } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import {
@@ -32,6 +33,9 @@ const CATEGORIES: TransactionCategory[] = [
   'savings',
   'investments',
   'debt_payment',
+  'bank_charges',
+  'fuel',
+  'mobile_data',
   'other',
 ];
 
@@ -79,7 +83,7 @@ export default function ExpensesPage() {
   // Generate insights
   const insights: { type: 'warning' | 'success' | 'tip'; text: string }[] = [];
 
-  if (totalSubs > settings.monthlyIncome * 0.05) {
+  if (totalSubs > settings.monthlyIncome * 0.08) {
     insights.push({
       type: 'warning',
       text: `Subscription costs of ${formatCurrency(totalSubs)} represent ${Math.round(
@@ -100,28 +104,14 @@ export default function ExpensesPage() {
     });
   }
 
-  // Check for expenses that could be moved to credit card
-  const cashExpenses = expenses.filter(
-    (e) =>
-      e.frequency === 'monthly' &&
-      !e.isSubscription &&
-      e.amount < settings.creditLimit * 0.05
-  );
-  if (cashExpenses.length > 0) {
-    insights.push({
-      type: 'tip',
-      text: `Consider paying ${cashExpenses.length} recurring expense(s) with your credit card and paying the full balance monthly — this builds payment history.`,
-    });
-  }
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-10">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Expense & Subscription Manager</h1>
+          <h1 className="text-2xl font-bold">Expense & Subscription Command</h1>
           <p className="text-sm text-muted mt-1">
-            Track recurring expenses and get optimisation insights
+            Manage your recurring costs across all FNB accounts
           </p>
         </div>
         <button
@@ -135,24 +125,25 @@ export default function ExpensesPage() {
 
       {/* Add Form */}
       {showForm && (
-        <div className="card">
-          <h3 className="text-sm font-medium mb-4">New Expense</h3>
+        <div className="card border-accent/20 bg-accent/5">
+          <h3 className="text-sm font-bold mb-4">New Recurring Expense</h3>
           <form
             onSubmit={handleSubmit}
             className="grid grid-cols-1 md:grid-cols-3 gap-4"
           >
             <div>
-              <label className="block text-xs text-muted mb-1">Name</label>
+              <label className="block text-xs text-muted mb-1 uppercase font-bold">Name</label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Netflix"
+                placeholder="e.g. Netflix, Gym, Rent"
                 required
+                className="w-full"
               />
             </div>
             <div>
-              <label className="block text-xs text-muted mb-1">Amount (R)</label>
+              <label className="block text-xs text-muted mb-1 uppercase font-bold">Amount (R)</label>
               <input
                 type="number"
                 value={amount}
@@ -161,15 +152,17 @@ export default function ExpensesPage() {
                 min={0}
                 step={0.01}
                 required
+                className="w-full"
               />
             </div>
             <div>
-              <label className="block text-xs text-muted mb-1">Category</label>
+              <label className="block text-xs text-muted mb-1 uppercase font-bold">Category</label>
               <select
                 value={category}
                 onChange={(e) =>
                   setCategory(e.target.value as TransactionCategory)
                 }
+                className="w-full"
               >
                 {CATEGORIES.map((cat) => (
                   <option key={cat} value={cat}>
@@ -179,12 +172,13 @@ export default function ExpensesPage() {
               </select>
             </div>
             <div>
-              <label className="block text-xs text-muted mb-1">Frequency</label>
+              <label className="block text-xs text-muted mb-1 uppercase font-bold">Frequency</label>
               <select
                 value={frequency}
                 onChange={(e) =>
                   setFrequency(e.target.value as Expense['frequency'])
                 }
+                className="w-full"
               >
                 <option value="monthly">Monthly</option>
                 <option value="weekly">Weekly</option>
@@ -192,30 +186,31 @@ export default function ExpensesPage() {
                 <option value="once">One-time</option>
               </select>
             </div>
-            <div className="flex items-end gap-3">
-              <label className="flex items-center gap-2 cursor-pointer">
+            <div className="flex items-end pb-2">
+              <label className="flex items-center gap-2 cursor-pointer bg-black/20 px-3 py-2 rounded border border-white/5">
                 <input
                   type="checkbox"
                   checked={isSub}
                   onChange={(e) => setIsSub(e.target.checked)}
-                  className="!w-4 !h-4"
+                  className="w-4 h-4"
                 />
-                <span className="text-sm">Subscription</span>
+                <span className="text-xs font-bold uppercase">Is Subscription</span>
               </label>
             </div>
             <div>
-              <label className="block text-xs text-muted mb-1">
-                Notes (optional)
+              <label className="block text-xs text-muted mb-1 uppercase font-bold">
+                Notes
               </label>
               <input
                 type="text"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Optional notes"
+                className="w-full"
               />
             </div>
-            <div className="md:col-span-3 flex gap-3">
-              <button type="submit" className="btn-primary">
+            <div className="md:col-span-3 flex gap-3 pt-2">
+              <button type="submit" className="btn-primary px-6">
                 Save Expense
               </button>
               <button
@@ -230,20 +225,20 @@ export default function ExpensesPage() {
         </div>
       )}
 
-      {/* Summary */}
+      {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="card">
-          <div className="text-xs text-muted uppercase tracking-wider mb-2">
-            Monthly Expenses
+          <div className="text-[10px] text-muted uppercase tracking-wider mb-2 font-bold">
+            Total Monthly Burn
           </div>
           <div className="text-3xl font-bold text-foreground">
             {formatCurrency(totalMonthly)}
           </div>
-          <div className="text-xs text-muted mt-1">{incomeRatio}% of income</div>
+          <div className="text-xs text-muted mt-1">{incomeRatio}% of gross income</div>
         </div>
         <div className="card">
-          <div className="text-xs text-muted uppercase tracking-wider mb-2">
-            Subscriptions
+          <div className="text-[10px] text-muted uppercase tracking-wider mb-2 font-bold">
+            Subscription Load
           </div>
           <div className="text-3xl font-bold text-purple-400">
             {formatCurrency(totalSubs)}
@@ -253,114 +248,91 @@ export default function ExpensesPage() {
           </div>
         </div>
         <div className="card">
-          <div className="text-xs text-muted uppercase tracking-wider mb-2">
-            Remaining
+          <div className="text-[10px] text-muted uppercase tracking-wider mb-2 font-bold">
+            Remaining Cash Flow
           </div>
           <div
             className={`text-3xl font-bold ${
-              settings.monthlyIncome - settings.monthlyRent - totalMonthly > 0
+              settings.monthlyIncome - totalMonthly > 0
                 ? 'text-emerald-400'
                 : 'text-red-400'
             }`}
           >
-            {formatCurrency(
-              settings.monthlyIncome - settings.monthlyRent - totalMonthly
-            )}
+            {formatCurrency(settings.monthlyIncome - totalMonthly)}
           </div>
           <div className="text-xs text-muted mt-1">
-            After rent and expenses
+            Monthly surplus for savings/investing
           </div>
         </div>
       </div>
 
-      {/* Insights */}
-      {insights.length > 0 && (
-        <div className="card">
-          <h3 className="text-sm font-medium mb-4">
-            Expense Intelligence
-          </h3>
-          <div className="space-y-3">
-            {insights.map((insight, i) => (
-              <div key={i} className="flex items-start gap-3">
-                {insight.type === 'warning' ? (
-                  <AlertTriangle className="w-4 h-4 text-yellow-400 mt-0.5 shrink-0" />
-                ) : insight.type === 'success' ? (
-                  <CheckCircle className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
-                ) : (
-                  <ArrowRight className="w-4 h-4 text-accent mt-0.5 shrink-0" />
-                )}
-                <p className="text-sm">{insight.text}</p>
-              </div>
-            ))}
-          </div>
+      {/* Intelligence */}
+      <div className="card bg-accent/5 border-accent/20">
+        <h3 className="text-sm font-bold mb-4 flex items-center gap-2">
+          <Zap className="w-4 h-4 text-accent" />
+          Expense Intelligence
+        </h3>
+        <div className="space-y-3">
+          {insights.length > 0 ? insights.map((insight, i) => (
+            <div key={i} className="flex items-start gap-3 bg-black/20 p-3 rounded border border-white/5">
+              {insight.type === 'warning' ? (
+                <AlertTriangle className="w-4 h-4 text-yellow-400 mt-0.5 shrink-0" />
+              ) : insight.type === 'success' ? (
+                <CheckCircle className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
+              ) : (
+                <ArrowRight className="w-4 h-4 text-accent mt-0.5 shrink-0" />
+              )}
+              <p className="text-sm leading-relaxed">{insight.text}</p>
+            </div>
+          )) : (
+            <p className="text-xs text-muted">No specific insights yet. Add more expenses to get AI-powered advice.</p>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Expense List */}
-      {expenses.length > 0 ? (
-        <div className="card">
-          <h3 className="text-sm font-medium text-muted mb-4">
-            All Expenses
-          </h3>
+      <div className="card overflow-hidden">
+        <div className="p-4 border-b border-white/5">
+          <h3 className="text-sm font-bold">Recurring Expense Registry</h3>
+        </div>
+        {expenses.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-left text-xs">
               <thead>
-                <tr className="border-b border-card-border">
-                  <th className="text-left py-3 px-4 text-xs text-muted uppercase tracking-wider">
-                    Name
-                  </th>
-                  <th className="text-left py-3 px-4 text-xs text-muted uppercase tracking-wider">
-                    Category
-                  </th>
-                  <th className="text-left py-3 px-4 text-xs text-muted uppercase tracking-wider">
-                    Frequency
-                  </th>
-                  <th className="text-left py-3 px-4 text-xs text-muted uppercase tracking-wider">
-                    Type
-                  </th>
-                  <th className="text-right py-3 px-4 text-xs text-muted uppercase tracking-wider">
-                    Amount
-                  </th>
-                  <th className="text-right py-3 px-4 text-xs text-muted uppercase tracking-wider">
-                    Actions
-                  </th>
+                <tr className="bg-white/5 text-muted uppercase tracking-wider">
+                  <th className="px-4 py-3 font-bold">Name</th>
+                  <th className="px-4 py-3 font-bold">Category</th>
+                  <th className="px-4 py-3 font-bold">Frequency</th>
+                  <th className="px-4 py-3 font-bold">Type</th>
+                  <th className="px-4 py-3 font-bold text-right">Amount</th>
+                  <th className="px-4 py-3 text-center">Actions</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-white/5">
                 {expenses.map((exp) => (
-                  <tr
-                    key={exp.id}
-                    className="border-b border-card-border/50 hover:bg-white/[0.02]"
-                  >
-                    <td className="py-3 px-4 font-medium">{exp.name}</td>
-                    <td className="py-3 px-4">
-                      <span
-                        className="badge text-xs"
-                        style={{
-                          background: `${getCategoryColor(exp.category)}20`,
-                          color: getCategoryColor(exp.category),
-                        }}
+                  <tr key={exp.id} className="hover:bg-white/5 transition-colors">
+                    <td className="px-4 py-3 font-medium">{exp.name}</td>
+                    <td className="px-4 py-3">
+                      <span 
+                        className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase"
+                        style={{ backgroundColor: `${getCategoryColor(exp.category)}20`, color: getCategoryColor(exp.category) }}
                       >
                         {getCategoryLabel(exp.category)}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-muted capitalize">
-                      {exp.frequency}
-                    </td>
-                    <td className="py-3 px-4">
+                    <td className="px-4 py-3 capitalize text-muted">{exp.frequency}</td>
+                    <td className="px-4 py-3">
                       {exp.isSubscription ? (
-                        <span className="badge badge-purple">Subscription</span>
+                        <span className="text-purple-400 font-bold uppercase text-[10px]">Subscription</span>
                       ) : (
-                        <span className="text-muted">Expense</span>
+                        <span className="text-muted text-[10px]">Standard</span>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-right font-medium">
-                      {formatCurrency(exp.amount)}
-                    </td>
-                    <td className="py-3 px-4 text-right">
+                    <td className="px-4 py-3 text-right font-bold">{formatCurrency(exp.amount)}</td>
+                    <td className="px-4 py-3 text-center">
                       <button
                         onClick={() => deleteExpense(exp.id)}
-                        className="text-muted hover:text-red-400 transition-colors"
+                        className="p-1.5 text-muted hover:text-red-400 transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -370,17 +342,12 @@ export default function ExpensesPage() {
               </tbody>
             </table>
           </div>
-        </div>
-      ) : (
-        <div className="card text-center py-16">
-          <Wallet className="w-12 h-12 text-muted mx-auto mb-4" />
-          <h3 className="text-lg font-medium mb-2">No Expenses Tracked</h3>
-          <p className="text-sm text-muted max-w-md mx-auto">
-            Add your recurring expenses and subscriptions to get intelligent
-            optimisation insights.
-          </p>
-        </div>
-      )}
+        ) : (
+          <div className="p-10 text-center text-muted italic">
+            No expenses registered yet.
+          </div>
+        )}
+      </div>
     </div>
   );
 }

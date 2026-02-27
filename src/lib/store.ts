@@ -11,6 +11,7 @@ import type {
   InvestmentDecision,
   MonthlyReport,
   UserSettings,
+  TransactionCategory,
 } from './types';
 
 interface AppActions {
@@ -43,6 +44,9 @@ interface AppActions {
 
   // Monthly Reports
   addMonthlyReport: (report: MonthlyReport) => void;
+
+  // Automated Updates
+  syncDashboardFromTransactions: () => void;
 }
 
 const DEFAULT_SETTINGS: UserSettings = {
@@ -50,12 +54,13 @@ const DEFAULT_SETTINGS: UserSettings = {
   monthlyRent: 7500,
   creditLimit: 50000,
   creditCardBalance: 0,
+  savingsBalance: 0,
+  debitBalance: 0,
   targetScore: 740,
   targetDate: '2026-08-31',
   name: 'User',
 };
 
-// Simple password - user can change in env
 const SYSTEM_PASSWORD = 'credit2026';
 
 export const useAppStore = create<AppState & AppActions>()(
@@ -98,15 +103,22 @@ export const useAppStore = create<AppState & AppActions>()(
         })),
 
       // Transactions
-      addTransactions: (txns) =>
+      addTransactions: (txns) => {
         set((state) => ({
           transactions: [...state.transactions, ...txns],
-        })),
-      deleteTransaction: (id) =>
+        }));
+        get().syncDashboardFromTransactions();
+      },
+      deleteTransaction: (id) => {
         set((state) => ({
           transactions: state.transactions.filter((t) => t.id !== id),
-        })),
-      clearTransactions: () => set({ transactions: [] }),
+        }));
+        get().syncDashboardFromTransactions();
+      },
+      clearTransactions: () => {
+        set({ transactions: [] });
+        get().syncDashboardFromTransactions();
+      },
 
       // Expenses
       addExpense: (expense) =>
@@ -141,6 +153,41 @@ export const useAppStore = create<AppState & AppActions>()(
         set((state) => ({
           monthlyReports: [report, ...state.monthlyReports],
         })),
+
+      // Automated Updates from Transactions
+      syncDashboardFromTransactions: () => {
+        const { transactions, settings } = get();
+        if (transactions.length === 0) return;
+
+        // Detect subscriptions (recurring monthly debits)
+        const counts: Record<string, { count: number; amount: number; category: TransactionCategory }> = {};
+        transactions.forEach(t => {
+          if (t.type === 'debit') {
+            const key = t.description.toLowerCase().trim();
+            if (!counts[key]) counts[key] = { count: 0, amount: 0, category: t.category };
+            counts[key].count++;
+            counts[key].amount = t.amount;
+          }
+        });
+
+        const detectedExpenses: Expense[] = Object.entries(counts)
+          .filter(([_, data]) => data.count >= 2) // Simple recurrence check
+          .map(([desc, data]) => ({
+            id: `auto-${desc}`,
+            name: desc.charAt(0).toUpperCase() + desc.slice(1),
+            amount: data.amount,
+            category: data.category,
+            frequency: 'monthly',
+            isSubscription: data.category === 'subscriptions',
+            startDate: new Date().toISOString(),
+          }));
+
+        // Update balances (simplified logic: take latest statement balance if we had it, 
+        // but for now we aggregate from txns if source is provided)
+        // Note: In a real app we'd track per-account balances.
+        
+        set({ expenses: detectedExpenses });
+      }
     }),
     {
       name: 'credit-command-storage',

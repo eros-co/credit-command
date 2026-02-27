@@ -13,6 +13,7 @@ import {
   calculateUtilisation,
   formatCurrency,
   getCategoryLabel,
+  analyzePurchaseTimeline,
 } from './calculations';
 
 // ─── Purchase Decision Engine ───────────────────────────────────────────
@@ -22,63 +23,8 @@ export function generatePurchaseDecision(
   settings: UserSettings,
   snapshot: FinancialSnapshot
 ): PurchaseDecision {
-  const { monthlyIncome, creditLimit, creditCardBalance, monthlyRent } = settings;
-  const disposableIncome = monthlyIncome - monthlyRent;
-  const currentUtil = calculateUtilisation(creditCardBalance, creditLimit);
-  const newUtil = calculateUtilisation(creditCardBalance + amount, creditLimit);
-  const affordabilityRatio = amount / disposableIncome;
-
-  let recommendation: PurchaseDecision['recommendation'];
-  let reasoning: string;
-  let creditImpact: string;
-  let utilisationImpact: string;
-  let cashFlowImpact: string;
-
-  if (newUtil > 30) {
-    if (affordabilityRatio > 0.5) {
-      recommendation = 'avoid';
-      reasoning = `Purchasing ${item} for ${formatCurrency(amount)} would push your credit utilisation to ${newUtil}% (above the critical 30% threshold) and represents ${Math.round(affordabilityRatio * 100)}% of your disposable income. This purchase is not advisable at this time. Your primary goal is to achieve a 740 credit score, and this purchase would significantly hinder that progress.`;
-    } else {
-      recommendation = 'delay';
-      reasoning = `While you can technically afford ${item}, purchasing it now on credit would push utilisation to ${newUtil}%. Delay this purchase until your credit card balance is lower. Pay down existing balance first, then reconsider in 1-2 months.`;
-    }
-    creditImpact = `Negative. Utilisation above 30% will likely decrease your credit score by 10-30 points.`;
-    utilisationImpact = `Current: ${currentUtil}% → After purchase: ${newUtil}% (EXCEEDS 30% threshold)`;
-  } else if (newUtil > 9) {
-    if (amount <= disposableIncome * 0.15) {
-      recommendation = 'buy_credit';
-      reasoning = `${item} for ${formatCurrency(amount)} is a manageable purchase. Using your credit card and paying the full balance at statement date will demonstrate responsible credit usage and help build your payment history — a key factor for reaching 740.`;
-      creditImpact = `Mildly positive. Regular credit usage with full repayment builds payment history.`;
-    } else {
-      recommendation = 'split';
-      reasoning = `Consider splitting the ${formatCurrency(amount)} purchase. Pay ${formatCurrency(Math.round(amount * 0.5))} on credit and ${formatCurrency(Math.round(amount * 0.5))} in cash. This keeps utilisation manageable while still building credit history.`;
-      creditImpact = `Neutral to mildly positive if managed correctly.`;
-    }
-    utilisationImpact = `Current: ${currentUtil}% → After purchase: ${newUtil}% (within acceptable range)`;
-  } else {
-    recommendation = 'buy_credit';
-    reasoning = `Excellent position. Purchasing ${item} for ${formatCurrency(amount)} on credit keeps utilisation at ${newUtil}%, well within the optimal 1-9% range. Pay the full balance at statement date to maximise credit score benefit.`;
-    creditImpact = `Positive. Low utilisation with consistent repayment is the ideal credit behaviour.`;
-    utilisationImpact = `Current: ${currentUtil}% → After purchase: ${newUtil}% (OPTIMAL range)`;
-  }
-
-  cashFlowImpact = affordabilityRatio <= 0.1
-    ? `Minimal impact. This represents only ${Math.round(affordabilityRatio * 100)}% of your disposable income.`
-    : affordabilityRatio <= 0.3
-    ? `Moderate impact. This is ${Math.round(affordabilityRatio * 100)}% of your disposable income. Ensure other obligations are covered.`
-    : `Significant impact. At ${Math.round(affordabilityRatio * 100)}% of disposable income, this will strain your monthly cash flow.`;
-
-  return {
-    id: uuidv4(),
-    date: new Date().toISOString(),
-    item,
-    amount,
-    recommendation,
-    reasoning,
-    creditImpact,
-    utilisationImpact,
-    cashFlowImpact,
-  };
+  // Use the new timeline-based analyzer
+  return analyzePurchaseTimeline(item, amount, snapshot, settings);
 }
 
 // ─── Investment Decision Engine ─────────────────────────────────────────

@@ -10,6 +10,8 @@ import {
   Activity,
   AlertTriangle,
   CheckCircle,
+  PiggyBank,
+  ShieldCheck,
 } from 'lucide-react';
 import {
   LineChart,
@@ -63,8 +65,7 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-2xl font-bold">Financial Command Centre</h1>
           <p className="text-sm text-muted mt-1">
-            Real-time overview of your financial health and credit optimisation
-            progress
+            Aggregated view of FNB Current, Credit, and Savings accounts
           </p>
         </div>
         <div className="badge badge-blue">
@@ -95,21 +96,20 @@ export default function DashboardPage() {
           valueColor={getScoreColor(snapshot.currentScore)}
         />
         <MetricCard
+          title="Total Cash"
+          value={formatCurrency(snapshot.totalCash)}
+          subtitle={`R${settings.savingsBalance.toLocaleString()} in Savings`}
+          icon={<PiggyBank className="w-5 h-5" />}
+          glow="green"
+          valueColor="text-emerald-400"
+        />
+        <MetricCard
           title="Utilisation"
           value={`${snapshot.utilisationRatio}%`}
           subtitle={`of ${formatCurrency(settings.creditLimit)} limit`}
           icon={<CreditCard className="w-5 h-5" />}
           glow={snapshot.utilisationRatio <= 9 ? 'green' : snapshot.utilisationRatio <= 30 ? 'yellow' : 'red'}
           valueColor={getUtilisationColor(snapshot.utilisationRatio)}
-        />
-        <MetricCard
-          title="Monthly Spending"
-          value={formatCurrency(snapshot.totalMonthlySpending)}
-          subtitle={`${Math.round(
-            (snapshot.totalMonthlySpending / settings.monthlyIncome) * 100
-          )}% of income`}
-          icon={<Wallet className="w-5 h-5" />}
-          glow="blue"
         />
         <MetricCard
           title="Health Rating"
@@ -148,7 +148,7 @@ export default function DashboardPage() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                 <XAxis dataKey="date" stroke="#64748b" fontSize={12} />
                 <YAxis
-                  domain={[300, 740]}
+                  domain={[300, 850]}
                   stroke="#64748b"
                   fontSize={12}
                 />
@@ -235,18 +235,18 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2 mb-3">
             <CreditCard className="w-4 h-4 text-accent" />
             <span className="text-xs text-muted uppercase tracking-wider">
-              Credit vs Cash
+              Monthly Spending
             </span>
           </div>
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-muted">Credit Spending</span>
+              <span className="text-muted">Credit</span>
               <span className="text-accent">
                 {formatCurrency(snapshot.creditSpending)}
               </span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-muted">Cash Spending</span>
+              <span className="text-muted">Debit/Cash</span>
               <span className="text-foreground">
                 {formatCurrency(snapshot.cashSpending)}
               </span>
@@ -274,96 +274,75 @@ export default function DashboardPage() {
 
         <div className="card">
           <div className="flex items-center gap-2 mb-3">
-            <Target className="w-4 h-4 text-emerald-400" />
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
             <span className="text-xs text-muted uppercase tracking-wider">
-              Income
+              Savings Ratio
             </span>
           </div>
           <div className="text-2xl font-bold text-emerald-400">
-            {formatCurrency(settings.monthlyIncome)}
+            {Math.round(((settings.monthlyIncome - snapshot.totalMonthlySpending) / settings.monthlyIncome) * 100)}%
           </div>
-          <div className="text-xs text-muted mt-1">Monthly gross income</div>
+          <div className="text-xs text-muted mt-1">Target: 20% or higher</div>
         </div>
 
         <div className="card">
           <div className="flex items-center gap-2 mb-3">
-            <Wallet className="w-4 h-4 text-yellow-400" />
+            <Target className="w-4 h-4 text-yellow-400" />
             <span className="text-xs text-muted uppercase tracking-wider">
-              Rent
+              Income
             </span>
           </div>
           <div className="text-2xl font-bold text-yellow-400">
-            {formatCurrency(settings.monthlyRent)}
+            {formatCurrency(settings.monthlyIncome)}
           </div>
-          <div className="text-xs text-muted mt-1">
-            {Math.round((settings.monthlyRent / settings.monthlyIncome) * 100)}%
-            of income
-          </div>
+          <div className="text-xs text-muted mt-1">Monthly gross income</div>
         </div>
       </div>
 
       {/* Quick Insights */}
       <div className="card">
         <h3 className="text-sm font-medium text-muted mb-4">
-          Quick Insights
+          Smart Insights
         </h3>
         <div className="space-y-3">
           {snapshot.utilisationRatio <= 9 ? (
             <div className="flex items-start gap-3">
               <CheckCircle className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
               <p className="text-sm text-foreground">
-                Credit utilisation is in the optimal range (1-9%). This is
-                excellent for your credit score.
+                Credit utilisation is in the <strong>optimal range (0-9%)</strong>. This is boosting your score significantly.
               </p>
             </div>
           ) : snapshot.utilisationRatio <= 30 ? (
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-4 h-4 text-yellow-400 mt-0.5 shrink-0" />
+              <CheckCircle className="w-4 h-4 text-green-400 mt-0.5 shrink-0" />
               <p className="text-sm text-foreground">
-                Credit utilisation at {snapshot.utilisationRatio}% is acceptable
-                but not optimal. Aim to reduce below 9% for maximum score
-                improvement.
+                Your utilisation is <strong>under 30%</strong>. Good job! Reducing it to under 10% could add another 10-15 points.
               </p>
             </div>
           ) : (
             <div className="flex items-start gap-3">
               <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
               <p className="text-sm text-foreground">
-                Credit utilisation at {snapshot.utilisationRatio}% is above the
-                30% threshold. This is actively harming your credit score.
-                Prioritise paying down your balance.
+                High credit utilisation detected. Prioritise paying down your <strong>FNB Credit Card</strong> to under R{(settings.creditLimit * 0.3).toFixed(0)} to see a score jump.
               </p>
             </div>
           )}
-
-          {snapshot.currentScore > 0 && gapToTarget > 0 && (
+          
+          {snapshot.totalSavings < snapshot.totalMonthlySpending ? (
             <div className="flex items-start gap-3">
-              <Target className="w-4 h-4 text-accent mt-0.5 shrink-0" />
+              <AlertTriangle className="w-4 h-4 text-yellow-400 mt-0.5 shrink-0" />
               <p className="text-sm text-foreground">
-                You are {gapToTarget} points away from your target score of{' '}
-                {settings.targetScore}. Maintain consistent on-time payments and
-                low utilisation.
+                Emergency fund is low. Try to build your <strong>Savings Account</strong> balance to at least {formatCurrency(snapshot.totalMonthlySpending * 3)} (3 months of expenses).
               </p>
             </div>
-          )}
-
-          {snapshot.currentScore >= settings.targetScore && snapshot.currentScore > 0 && (
+          ) : (
             <div className="flex items-start gap-3">
               <CheckCircle className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
               <p className="text-sm text-foreground">
-                Congratulations! You have achieved your target credit score.
-                Focus on maintaining this level.
+                You have a healthy emergency fund covering over 3 months of expenses. Great financial security!
               </p>
             </div>
           )}
-
-          <div className="flex items-start gap-3">
-            <Activity className="w-4 h-4 text-accent mt-0.5 shrink-0" />
-            <p className="text-sm text-foreground">
-              Predicted score in 6 months: {snapshot.predictedScore6m} (based
-              on current behaviour patterns).
-            </p>
-          </div>
         </div>
       </div>
     </div>

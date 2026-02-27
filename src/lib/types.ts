@@ -13,7 +13,8 @@ export interface Transaction {
   amount: number;
   category: TransactionCategory;
   type: 'debit' | 'credit';
-  source: 'bank' | 'credit_card';
+  source: 'bank' | 'credit_card' | 'savings';
+  accountNumber?: string;
   isSubscription: boolean;
   tags?: string[];
 }
@@ -34,6 +35,9 @@ export type TransactionCategory =
   | 'debt_payment'
   | 'income'
   | 'transfer'
+  | 'bank_charges'
+  | 'fuel'
+  | 'mobile_data'
   | 'other';
 
 export interface Expense {
@@ -48,13 +52,21 @@ export interface Expense {
   notes?: string;
 }
 
+export interface SavingsPlan {
+  month: string; // YYYY-MM
+  amount: number;
+  targetBalance: number;
+}
+
 export interface PurchaseDecision {
   id: string;
   date: string;
   item: string;
   amount: number;
-  recommendation: 'buy_credit' | 'buy_cash' | 'delay' | 'split' | 'avoid';
+  recommendation: 'buy_now' | 'save_and_buy' | 'delay' | 'avoid';
+  targetPurchaseDate: string; // YYYY-MM
   reasoning: string;
+  savingsPlan: SavingsPlan[];
   creditImpact: string;
   utilisationImpact: string;
   cashFlowImpact: string;
@@ -91,6 +103,8 @@ export interface UserSettings {
   monthlyRent: number;
   creditLimit: number;
   creditCardBalance: number;
+  savingsBalance: number;
+  debitBalance: number;
   targetScore: number;
   targetDate: string;
   name: string;
@@ -104,6 +118,8 @@ export interface FinancialSnapshot {
   creditSpending: number;
   cashSpending: number;
   subscriptionCosts: number;
+  totalSavings: number;
+  totalCash: number;
   healthRating: 'excellent' | 'good' | 'fair' | 'poor' | 'critical';
   predictedScore3m: number;
   predictedScore6m: number;

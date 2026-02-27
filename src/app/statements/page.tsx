@@ -34,7 +34,11 @@ const fmt = (n: number) =>
 interface UploadedStatement {
   id: string;
   fileName: string;
-  parsed: ParsedStatement;
+  status: 'processing' | 'completed' | 'error';
+  taskId?: string;
+  taskUrl?: string;
+  parsed?: ParsedStatement;
+  error?: string;
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -61,14 +65,25 @@ export default function StatementsPage() {
         formData.append('file', file);
         const res = await fetch('/api/parse-statement', { method: 'POST', body: formData });
         const json = await res.json();
+        
         if (!res.ok || !json.success) {
+          const stmt: UploadedStatement = {
+            id: crypto.randomUUID(),
+            fileName: file.name,
+            status: 'error',
+            error: json.error ?? 'Unknown error',
+          };
+          setStatements(prev => [...prev, stmt]);
           setError(`Failed to parse ${file.name}: ${json.error ?? 'Unknown error'}`);
           continue;
         }
+
         const stmt: UploadedStatement = {
           id: crypto.randomUUID(),
           fileName: file.name,
-          parsed: json.data as ParsedStatement,
+          status: 'processing',
+          taskId: json.taskId,
+          taskUrl: json.taskUrl,
         };
         setStatements(prev => [...prev, stmt]);
         setSelected(stmt.id);
@@ -138,7 +153,7 @@ export default function StatementsPage() {
         {uploading ? (
           <div className="flex flex-col items-center gap-3">
             <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-slate-300">Parsing PDF statement…</p>
+            <p className="text-slate-300">Uploading and processing PDF statement…</p>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-3">
@@ -162,19 +177,33 @@ export default function StatementsPage() {
             <button
               key={s.id}
               onClick={() => setSelected(s.id)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${selected === s.id ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${selected === s.id ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
             >
-              {s.parsed.statementType === 'credit_card' ? '💳' : '🏦'}{' '}
-              {s.parsed.statementType === 'credit_card' ? 'Credit Card' : 'Current Acc'}{' '}
-              #{s.parsed.statementNumber}{' '}
-              <span className="text-xs opacity-70">{(s.parsed.periodEnd || s.parsed.statementDate).slice(0, 7)}</span>
+              {s.status === 'processing' && <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />}
+              {s.status === 'completed' && <span>✓</span>}
+              {s.status === 'error' && <span>✕</span>}
+              <span className="truncate max-w-xs">{s.fileName}</span>
             </button>
           ))}
         </div>
       )}
 
+      {/* Status messages */}
+      {current && current.status === 'processing' && (
+        <div className="bg-blue-900/30 border border-blue-700 rounded-lg p-4 text-blue-300 text-sm">
+          ⏳ Processing your statement... This may take 30-60 seconds. You can check the progress at{' '}
+          {current.taskUrl && <a href={current.taskUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-200">Manus Task</a>}
+        </div>
+      )}
+
+      {current && current.status === 'error' && (
+        <div className="bg-red-900/30 border border-red-700 rounded-lg p-4 text-red-300 text-sm">
+          ✕ Error: {current.error}
+        </div>
+      )}
+
       {/* Analysis */}
-      {parsed && (
+      {parsed && current?.status === 'completed' && (
         <>
           {/* Statement meta */}
           <div className="bg-slate-800/50 rounded-xl p-4 text-sm text-slate-300 flex flex-wrap gap-6">
@@ -243,11 +272,13 @@ export default function StatementsPage() {
                 {categoryData.map(cat => (
                   <div key={cat.name} className="bg-slate-700/50 rounded-lg p-3">
                     <div className="flex items-center gap-2 mb-1">
-                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: CATEGORY_COLORS[cat.name] ?? '#94a3b8' }} />
-                      <span className="text-slate-300 text-xs truncate">{cat.name}</span>
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[cat.name] ?? '#94a3b8' }} />
+                      <p className="text-xs text-slate-400 truncate">{cat.name}</p>
                     </div>
                     <p className="text-white font-semibold text-sm">{fmt(cat.value)}</p>
-                    <p className="text-slate-500 text-xs">{((cat.value / parsed.totalDebits) * 100).toFixed(1)}% of spending</p>
+                    <p className="text-xs text-slate-500">
+                      {((cat.value / (parsed.totalDebits || 1)) * 100).toFixed(1)}%
+                    </p>
                   </div>
                 ))}
               </div>
@@ -255,60 +286,65 @@ export default function StatementsPage() {
           )}
 
           {/* Transactions table */}
-          <div className="bg-slate-800 rounded-xl p-5">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
-              <h3 className="text-white font-semibold">Transactions ({filteredTx.length} of {parsed.transactions.length})</h3>
-              <div className="flex gap-2 flex-wrap">
-                <input type="text" placeholder="Search…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="bg-slate-700 text-white text-sm rounded-lg px-3 py-1.5 border border-slate-600 focus:outline-none focus:border-blue-500 w-40" />
-                <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="bg-slate-700 text-white text-sm rounded-lg px-3 py-1.5 border border-slate-600 focus:outline-none focus:border-blue-500">
-                  {allCategories.map(c => <option key={c} value={c}>{c}</option>)}
+          {filteredTx.length > 0 && (
+            <div className="bg-slate-800 rounded-xl p-5">
+              <div className="flex flex-col md:flex-row gap-4 mb-4">
+                <input
+                  type="text"
+                  placeholder="Search transactions..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="flex-1 px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                />
+                <select
+                  value={filterCategory}
+                  onChange={e => setFilterCategory(e.target.value)}
+                  className="px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+                >
+                  {allCategories.map(cat => <option key={cat}>{cat}</option>)}
                 </select>
-                <div className="flex rounded-lg overflow-hidden border border-slate-600">
-                  {(['all', 'debit', 'credit'] as const).map(t => (
-                    <button key={t} onClick={() => setFilterType(t)} className={`px-3 py-1.5 text-sm capitalize transition-colors ${filterType === t ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>{t}</button>
-                  ))}
-                </div>
+                <select
+                  value={filterType}
+                  onChange={e => setFilterType(e.target.value as any)}
+                  className="px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+                >
+                  <option value="all">All Types</option>
+                  <option value="debit">Debits</option>
+                  <option value="credit">Credits</option>
+                </select>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-700">
+                      <th className="text-left py-2 px-3 text-slate-400 font-medium">Date</th>
+                      <th className="text-left py-2 px-3 text-slate-400 font-medium">Description</th>
+                      <th className="text-left py-2 px-3 text-slate-400 font-medium">Category</th>
+                      <th className="text-right py-2 px-3 text-slate-400 font-medium">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredTx.map((tx, i) => (
+                      <tr key={i} className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors">
+                        <td className="py-2 px-3 text-slate-300">{tx.date}</td>
+                        <td className="py-2 px-3 text-slate-300 truncate">{tx.description}</td>
+                        <td className="py-2 px-3 text-slate-300 text-xs">{tx.category}</td>
+                        <td className={`py-2 px-3 text-right font-mono ${tx.type === 'debit' ? 'text-red-400' : 'text-green-400'}`}>
+                          {tx.type === 'debit' ? '-' : '+'}{fmt(tx.amount)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-slate-400 border-b border-slate-700">
-                    <th className="text-left py-2 pr-4 font-medium">Date</th>
-                    <th className="text-left py-2 pr-4 font-medium">Description</th>
-                    <th className="text-left py-2 pr-4 font-medium">Category</th>
-                    <th className="text-right py-2 font-medium">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredTx.length === 0 ? (
-                    <tr><td colSpan={4} className="text-center py-8 text-slate-500">No transactions match your filters.</td></tr>
-                  ) : filteredTx.map((tx, i) => (
-                    <tr key={i} className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors">
-                      <td className="py-2.5 pr-4 text-slate-400 whitespace-nowrap">{tx.date ? tx.date.slice(0, 10) : '—'}</td>
-                      <td className="py-2.5 pr-4 text-white max-w-xs"><span className="truncate block">{tx.description || tx.rawDescription}</span></td>
-                      <td className="py-2.5 pr-4">
-                        <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={{ background: (CATEGORY_COLORS[tx.category] ?? '#94a3b8') + '22', color: CATEGORY_COLORS[tx.category] ?? '#94a3b8', border: `1px solid ${(CATEGORY_COLORS[tx.category] ?? '#94a3b8')}44` }}>
-                          {tx.category}
-                        </span>
-                      </td>
-                      <td className={`py-2.5 text-right font-medium whitespace-nowrap ${tx.type === 'credit' ? 'text-green-400' : 'text-red-400'}`}>
-                        {tx.type === 'credit' ? '+' : '-'}{fmt(tx.amount)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          )}
         </>
       )}
 
-      {statements.length === 0 && !uploading && (
-        <div className="text-center py-16 text-slate-500">
-          <div className="text-5xl mb-4">📋</div>
-          <p className="text-lg font-medium text-slate-400">No statements uploaded yet</p>
-          <p className="text-sm mt-2">Upload your FNB Private Wealth PDF statements to get started</p>
+      {statements.length === 0 && !error && (
+        <div className="text-center py-12 text-slate-400">
+          <p>No statements uploaded yet. Start by uploading your FNB PDF statements above.</p>
         </div>
       )}
     </div>
@@ -317,9 +353,9 @@ export default function StatementsPage() {
 
 function SCard({ label, value, color }: { label: string; value: string; color: string }) {
   return (
-    <div className="bg-slate-800 rounded-xl p-4">
-      <p className="text-slate-400 text-xs uppercase tracking-wider mb-2">{label}</p>
-      <p className={`text-lg font-bold ${color}`}>{value}</p>
+    <div className="bg-slate-800/50 rounded-lg p-4">
+      <p className="text-slate-400 text-xs mb-1">{label}</p>
+      <p className={`text-lg font-semibold ${color}`}>{value}</p>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell,
@@ -39,7 +39,10 @@ interface UploadedStatement {
   taskUrl?: string;
   parsed?: ParsedStatement;
   error?: string;
+  uploadedAt?: number;
 }
+
+const STORAGE_KEY = 'credit-command-statements';
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function StatementsPage() {
@@ -52,6 +55,100 @@ export default function StatementsPage() {
   const [filterCategory, setFilterCategory] = useState('All');
   const [filterType, setFilterType] = useState<'all' | 'debit' | 'credit'>('all');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pollingRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+
+  // Load statements from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored) as UploadedStatement[];
+        setStatements(parsed);
+        if (parsed.length > 0) {
+          setSelected(parsed[0].id);
+        }
+        // Start polling for any processing statements
+        parsed.forEach(stmt => {
+          if (stmt.status === 'processing' && stmt.taskId) {
+            startPolling(stmt.id, stmt.taskId);
+          }
+        });
+      } catch (e) {
+        console.error('Failed to load statements from storage:', e);
+      }
+    }
+  }, []);
+
+  // Save statements to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(statements));
+  }, [statements]);
+
+  const startPolling = useCallback((stmtId: string, taskId: string) => {
+    // Clear any existing polling for this statement
+    const existingInterval = pollingRef.current.get(stmtId);
+    if (existingInterval) clearInterval(existingInterval);
+
+    // Start polling every 5 seconds
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/manus-task-status?taskId=${taskId}`);
+        const data = await res.json();
+
+        if (!res.ok) {
+          console.error('[Polling] Error:', data.error);
+          return;
+        }
+
+        console.log(`[Polling] Task ${taskId} status:`, data.status);
+
+        // Check if task is complete
+        if (data.status === 'completed' || data.status === 'success') {
+          console.log('[Polling] Task completed, parsing results...');
+          
+          // Parse the result from Manus
+          let parsedData: ParsedStatement | null = null;
+          try {
+            if (data.result) {
+              parsedData = JSON.parse(data.result);
+            } else if (data.output) {
+              parsedData = JSON.parse(data.output);
+            }
+          } catch (e) {
+            console.error('[Polling] Failed to parse result:', e);
+          }
+
+          if (parsedData) {
+            // Update the statement with parsed data
+            setStatements(prev =>
+              prev.map(s =>
+                s.id === stmtId
+                  ? { ...s, status: 'completed', parsed: parsedData }
+                  : s
+              )
+            );
+            clearInterval(interval);
+            pollingRef.current.delete(stmtId);
+          }
+        } else if (data.status === 'failed' || data.status === 'error') {
+          console.error('[Polling] Task failed:', data.error);
+          setStatements(prev =>
+            prev.map(s =>
+              s.id === stmtId
+                ? { ...s, status: 'error', error: data.error || 'Task failed' }
+                : s
+            )
+          );
+          clearInterval(interval);
+          pollingRef.current.delete(stmtId);
+        }
+      } catch (err) {
+        console.error('[Polling] Error checking task status:', err);
+      }
+    }, 5000);
+
+    pollingRef.current.set(stmtId, interval);
+  }, []);
 
   const handleFiles = useCallback(async (files: FileList | File[]) => {
     const fileArray = Array.from(files).filter(f => f.name.toLowerCase().endsWith('.pdf'));
@@ -72,27 +169,35 @@ export default function StatementsPage() {
             fileName: file.name,
             status: 'error',
             error: json.error ?? 'Unknown error',
+            uploadedAt: Date.now(),
           };
           setStatements(prev => [...prev, stmt]);
           setError(`Failed to parse ${file.name}: ${json.error ?? 'Unknown error'}`);
           continue;
         }
 
+        const stmtId = crypto.randomUUID();
         const stmt: UploadedStatement = {
-          id: crypto.randomUUID(),
+          id: stmtId,
           fileName: file.name,
           status: 'processing',
           taskId: json.taskId,
           taskUrl: json.taskUrl,
+          uploadedAt: Date.now(),
         };
         setStatements(prev => [...prev, stmt]);
-        setSelected(stmt.id);
+        setSelected(stmtId);
+
+        // Start polling for this statement
+        if (json.taskId) {
+          startPolling(stmtId, json.taskId);
+        }
       } catch (err) {
         setError(`Error processing ${file.name}: ${err instanceof Error ? err.message : 'Unknown'}`);
       }
     }
     setUploading(false);
-  }, []);
+  }, [startPolling]);
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files);

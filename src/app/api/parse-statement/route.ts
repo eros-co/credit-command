@@ -69,12 +69,14 @@ The PDF file is attached. Please process it and provide the structured JSON outp
     });
 
     if (!response.ok) {
-      const error = await response.text();
+      const errorText = await response.text();
+      console.error("Manus API error details:", errorText);
       console.error('Manus API error:', error);
       return NextResponse.json(
         { 
           error: 'Failed to create Manus task',
-          details: error,
+          details: errorText,
+          statusCode: response.status,
           status: response.status
         },
         { status: response.status }

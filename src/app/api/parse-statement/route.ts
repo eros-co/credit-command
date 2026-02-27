@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
 
   try {
     console.log('[PDF Parser] Starting PDF upload processing');
-    
+
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
 
@@ -86,7 +86,7 @@ Use the Manus 1.6 Lite model for efficient PDF parsing.`;
     // Create the task payload with Manus 1.6 Lite model
     const taskPayload = {
       prompt: taskInstructions,
-      model: 'manus',
+      model: 'manus 1.6 Lite',
       attachments: [
         {
           filename: file.name,

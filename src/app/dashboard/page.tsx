@@ -70,10 +70,10 @@ export default function DashboardPage() {
         </div>
         <div className="badge badge-blue">
           Target: {settings.targetScore} by{' '}
-          {new Date(settings.targetDate).toLocaleDateString('en-ZA', {
+          {settings.targetDate ? new Date(settings.targetDate).toLocaleDateString('en-ZA', {
             month: 'short',
             year: 'numeric',
-          })}
+          }) : 'Unknown'}
         </div>
       </div>
 
@@ -87,9 +87,9 @@ export default function DashboardPage() {
           trendValue={
             creditScores.length >= 2
               ? `${Math.abs(
-                  creditScores[creditScores.length - 1].score -
-                    creditScores[creditScores.length - 2].score
-                )} pts`
+                creditScores[creditScores.length - 1].score -
+                creditScores[creditScores.length - 2].score
+              )} pts`
               : undefined
           }
           glow={snapshot.currentScore >= 700 ? 'green' : 'blue'}
@@ -120,10 +120,10 @@ export default function DashboardPage() {
             snapshot.healthRating === 'excellent'
               ? 'green'
               : snapshot.healthRating === 'good'
-              ? 'green'
-              : snapshot.healthRating === 'fair'
-              ? 'yellow'
-              : 'red'
+                ? 'green'
+                : snapshot.healthRating === 'fair'
+                  ? 'yellow'
+                  : 'red'
           }
           valueColor={getHealthColor(snapshot.healthRating)}
         />
@@ -217,9 +217,8 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted">Gap to Target</span>
                 <span
-                  className={`text-lg font-bold ${
-                    gapToTarget <= 0 ? 'text-emerald-400' : 'text-accent'
-                  }`}
+                  className={`text-lg font-bold ${gapToTarget <= 0 ? 'text-emerald-400' : 'text-accent'
+                    }`}
                 >
                   {gapToTarget <= 0 ? 'Achieved!' : `${gapToTarget} pts`}
                 </span>
@@ -327,7 +326,7 @@ export default function DashboardPage() {
               </p>
             </div>
           )}
-          
+
           {snapshot.totalSavings < snapshot.totalMonthlySpending ? (
             <div className="flex items-start gap-3">
               <AlertTriangle className="w-4 h-4 text-yellow-400 mt-0.5 shrink-0" />

@@ -156,41 +156,49 @@ export const useAppStore = create<AppState & AppActions>()(
 
       // Automated Updates from Transactions
       syncDashboardFromTransactions: () => {
-        const { transactions, settings } = get();
+        const { transactions } = get();
         if (transactions.length === 0) return;
 
-        // Detect subscriptions (recurring monthly debits)
-        const counts: Record<string, { count: number; amount: number; category: TransactionCategory }> = {};
-        transactions.forEach(t => {
-          if (t.type === 'debit') {
-            const key = t.description.toLowerCase().trim();
-            if (!counts[key]) counts[key] = { count: 0, amount: 0, category: t.category };
-            counts[key].count++;
-            counts[key].amount = t.amount;
-          }
-        });
+        // With AI parsing running once a month, we trust the 'isSubscription' flag 
+        // set by the manus statement processor rather than relying on multiple occurrences.
+        const detectedExpenses: Expense[] = transactions
+          .filter((t) => t.isSubscription && t.type === 'debit')
+          // Deduplicate by description if multiple statements are uploaded over time
+          .reduce((acc, t) => {
+             const key = t.description.toLowerCase().trim();
+             if (!acc.some(e => e.name.toLowerCase() === key)) {
+               acc.push({
+                 id: `auto-${key}-${t.id}`,
+                 name: t.description.charAt(0).toUpperCase() + t.description.slice(1),
+                 amount: t.amount,
+                 category: t.category,
+                 frequency: 'monthly',
+                 isSubscription: true,
+                 startDate: t.date,
+               });
+             }
+             return acc;
+          }, [] as Expense[]);
 
-        const detectedExpenses: Expense[] = Object.entries(counts)
-          .filter(([_, data]) => data.count >= 2) // Simple recurrence check
-          .map(([desc, data]) => ({
-            id: `auto-${desc}`,
-            name: desc.charAt(0).toUpperCase() + desc.slice(1),
-            amount: data.amount,
-            category: data.category,
-            frequency: 'monthly',
-            isSubscription: data.category === 'subscriptions',
-            startDate: new Date().toISOString(),
-          }));
-
-        // Update balances (simplified logic: take latest statement balance if we had it, 
-        // but for now we aggregate from txns if source is provided)
-        // Note: In a real app we'd track per-account balances.
-        
         set({ expenses: detectedExpenses });
       }
     }),
     {
       name: 'credit-command-storage',
+      merge: (persistedState: any, currentState) => ({
+        ...currentState,
+        ...persistedState,
+        settings: {
+          ...currentState.settings,
+          ...(persistedState?.settings || {}),
+        },
+        creditScores: persistedState?.creditScores || currentState.creditScores,
+        transactions: persistedState?.transactions || currentState.transactions,
+        expenses: persistedState?.expenses || currentState.expenses,
+        purchaseDecisions: persistedState?.purchaseDecisions || currentState.purchaseDecisions,
+        investmentDecisions: persistedState?.investmentDecisions || currentState.investmentDecisions,
+        monthlyReports: persistedState?.monthlyReports || currentState.monthlyReports,
+      }),
       partialize: (state) => ({
         settings: state.settings,
         creditScores: state.creditScores,

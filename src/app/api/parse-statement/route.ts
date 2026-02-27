@@ -95,15 +95,18 @@ The PDF file is attached. Please process it and provide the structured JSON outp
     }
 
     const taskData = await response.json();
-    console.log(`[PDF Parser] Task created successfully:`, taskData.id);
+    console.log(`[PDF Parser] Task created successfully:`, taskData);
+    
+    const taskId = taskData.task_id || taskData.id;
+    console.log(`[PDF Parser] Task ID:`, taskId);
 
     return NextResponse.json({
       success: true,
       message: 'PDF sent to Manus for processing',
-      taskId: taskData.id,
+      taskId: taskId,
       status: 'processing',
       estimatedTime: '30-60 seconds',
-      taskUrl: taskData.task_url || `https://manus.im/app/${taskData.id}`
+      taskUrl: taskData.task_url || `https://manus.im/app/${taskId}`
     });
   } catch (error) {
     console.error('[PDF Parser] Unexpected error:', error);

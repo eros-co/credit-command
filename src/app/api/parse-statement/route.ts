@@ -8,18 +8,22 @@ export const maxDuration = 60;
 
 const MANUS_API_KEY = process.env.MANUS_API_KEY || 'sk-sinvDZ-cU0wfimql8b9qZl7DJkDgWtxnAk8wkU4daqQXU-Hr_JQTMLDjtSIKEY-yoqWiMtWoHHkyNGYQV9m6ScQZcF4k';
 const MANUS_API_URL = 'https://api.manus.ai/v1/tasks';
-const WEBHOOK_URL = process.env.WEBHOOK_URL || 'https://credit-command.vercel.app/api/manus-webhook';
 
 export async function POST(request: NextRequest) {
   const tmpFile = join(tmpdir(), `pdf_${Date.now()}_${Math.random().toString(36).slice(2)}.pdf`);
 
   try {
+    console.log('[PDF Parser] Starting PDF upload processing');
+    
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
 
     if (!file) {
+      console.log('[PDF Parser] No file provided');
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
+
+    console.log(`[PDF Parser] File received: ${file.name} (${file.size} bytes)`);
 
     if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
       return NextResponse.json({ error: 'File must be a PDF' }, { status: 400 });
@@ -28,10 +32,12 @@ export async function POST(request: NextRequest) {
     // Write the uploaded file to a temporary location
     const buffer = await file.arrayBuffer();
     writeFileSync(tmpFile, Buffer.from(buffer));
+    console.log(`[PDF Parser] File written to temp location: ${tmpFile}`);
 
     // Read the file as base64 for the API
     const fileBuffer = readFileSync(tmpFile);
     const base64File = fileBuffer.toString('base64');
+    console.log(`[PDF Parser] File converted to base64 (${base64File.length} characters)`);
 
     // Create a Manus task to process the PDF
     const taskInstructions = `You are an FNB (First National Bank) statement parser. I'm uploading an FNB Private Wealth bank statement PDF.
@@ -58,6 +64,9 @@ The PDF file is attached. Please process it and provide the structured JSON outp
       ]
     };
 
+    console.log(`[PDF Parser] Calling Manus API at ${MANUS_API_URL}`);
+    console.log(`[PDF Parser] API Key: ${MANUS_API_KEY.substring(0, 20)}...`);
+
     // Call the Manus API to create a task
     const response = await fetch(MANUS_API_URL, {
       method: 'POST',
@@ -68,21 +77,26 @@ The PDF file is attached. Please process it and provide the structured JSON outp
       body: JSON.stringify(taskPayload)
     });
 
+    console.log(`[PDF Parser] Manus API response status: ${response.status}`);
+
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Manus API error details:", errorText);
+      console.error(`[PDF Parser] Manus API error (${response.status}):`, errorText);
+      console.error(`[PDF Parser] Response headers:`, Object.fromEntries(response.headers));
+      
       return NextResponse.json(
         { 
           error: 'Failed to create Manus task',
           details: errorText,
           statusCode: response.status,
-          status: response.status
+          message: `HTTP ${response.status}: ${errorText.substring(0, 200)}`
         },
         { status: response.status }
       );
     }
 
     const taskData = await response.json();
+    console.log(`[PDF Parser] Task created successfully:`, taskData.id);
 
     return NextResponse.json({
       success: true,
@@ -93,11 +107,12 @@ The PDF file is attached. Please process it and provide the structured JSON outp
       taskUrl: taskData.task_url || `https://manus.im/app/${taskData.id}`
     });
   } catch (error) {
-    console.error('Error processing PDF:', error);
+    console.error('[PDF Parser] Unexpected error:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
       { 
         error: 'Failed to process PDF',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        details: errorMessage
       },
       { status: 500 }
     );
@@ -105,8 +120,9 @@ The PDF file is attached. Please process it and provide the structured JSON outp
     // Clean up temporary file
     try {
       unlinkSync(tmpFile);
+      console.log('[PDF Parser] Temp file cleaned up');
     } catch (err) {
-      // Ignore cleanup errors
+      console.log('[PDF Parser] Could not clean up temp file:', err);
     }
   }
 }

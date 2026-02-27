@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { Suspense, useState, useRef, useCallback, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell,
@@ -31,7 +32,9 @@ function stripMarkdownFences(text: string): string {
     .trim();
 }
 
-export default function StatementsPage() {
+function StatementsInner() {
+  const searchParams = useSearchParams();
+  const typeFilter = searchParams.get('type');
   const [statements, setStatements] = useState<UploadedStatement[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -211,6 +214,24 @@ export default function StatementsPage() {
     if (selected === id) setSelected(null);
   };
 
+  const filteredStatements = statements.filter(stmt => {
+    if (!typeFilter) return true;
+    if (stmt.status !== 'completed' || !stmt.parsed) return true; // Keep processing/error ones visible so user can see what's happening
+
+    const statementType = stmt.parsed.statementType || '';
+    if (typeFilter === 'credit') return statementType === 'credit_card';
+    if (typeFilter === 'debit') return statementType === 'current_account';
+    if (typeFilter === 'savings') return statementType === 'savings_account';
+    return true;
+  });
+
+  // Ensure selected is still visible, if not, reset or set to first filtered
+  useEffect(() => {
+    if (selected && !filteredStatements.find(s => s.id === selected)) {
+      setSelected(filteredStatements.length > 0 ? filteredStatements[0].id : null);
+    }
+  }, [typeFilter, selected, filteredStatements]);
+
   const current = statements.find(s => s.id === selected);
   const parsed = current?.parsed;
 
@@ -219,7 +240,12 @@ export default function StatementsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">FNB Statement Command</h1>
-          <p className="text-sm text-muted mt-1">Upload Current, Credit, or Savings PDFs for multi-account analysis</p>
+          <p className="text-sm text-muted mt-1">
+            {typeFilter === 'credit' ? 'Credit Card Statements' :
+              typeFilter === 'debit' ? 'Current Account Statements' :
+                typeFilter === 'savings' ? 'Savings Statements' :
+                  'Upload Current, Credit, or Savings PDFs for multi-account analysis'}
+          </p>
         </div>
         <button
           onClick={() => fileInputRef.current?.click()}
@@ -243,13 +269,13 @@ export default function StatementsPage() {
         {/* Sidebar: List of Statements */}
         <div className="lg:col-span-1 space-y-3">
           <h3 className="text-xs font-bold uppercase tracking-wider text-muted px-1">Uploaded Statements</h3>
-          {statements.length === 0 ? (
+          {filteredStatements.length === 0 ? (
             <div className="card text-center py-10 border-dashed">
               <FileText className="w-8 h-8 text-muted mx-auto mb-2 opacity-20" />
-              <p className="text-xs text-muted">No statements uploaded yet</p>
+              <p className="text-xs text-muted">No statements found</p>
             </div>
           ) : (
-            statements.map(stmt => (
+            filteredStatements.map(stmt => (
               <div
                 key={stmt.id}
                 onClick={() => setSelected(stmt.id)}
@@ -302,21 +328,21 @@ export default function StatementsPage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="card p-4">
                   <div className="text-[10px] text-muted uppercase tracking-wider mb-1">Account Type</div>
-                  <div className="text-sm font-bold capitalize">{parsed.statementType.replace('_', ' ')}</div>
+                  <div className="text-sm font-bold capitalize">{parsed?.statementType?.replace(/_/g, ' ') || 'Unknown Setup'}</div>
                 </div>
                 <div className="card p-4">
                   <div className="text-[10px] text-muted uppercase tracking-wider mb-1">Closing Balance</div>
-                  <div className={`text-sm font-bold ${parsed.closingBalance >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {formatCurrency(parsed.closingBalance)}
+                  <div className={`text-sm font-bold ${(parsed?.closingBalance || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {formatCurrency(parsed?.closingBalance || 0)}
                   </div>
                 </div>
                 <div className="card p-4">
                   <div className="text-[10px] text-muted uppercase tracking-wider mb-1">Total Debits</div>
-                  <div className="text-sm font-bold text-accent">{formatCurrency(parsed.totalDebits)}</div>
+                  <div className="text-sm font-bold text-accent">{formatCurrency(parsed?.totalDebits || 0)}</div>
                 </div>
                 <div className="card p-4">
                   <div className="text-[10px] text-muted uppercase tracking-wider mb-1">Total Credits</div>
-                  <div className="text-sm font-bold text-emerald-400">{formatCurrency(parsed.totalCredits)}</div>
+                  <div className="text-sm font-bold text-emerald-400">{formatCurrency(parsed?.totalCredits || 0)}</div>
                 </div>
               </div>
 
@@ -324,7 +350,7 @@ export default function StatementsPage() {
               <div className="card overflow-hidden">
                 <div className="p-4 border-b border-white/5 flex items-center justify-between">
                   <h3 className="text-sm font-bold">Transaction History</h3>
-                  <span className="text-xs text-muted">{parsed.transactions.length} items</span>
+                  <span className="text-xs text-muted">{(parsed?.transactions || []).length} items</span>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
@@ -337,17 +363,17 @@ export default function StatementsPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                      {parsed.transactions.map((tx: any, i: number) => (
+                      {(parsed?.transactions || []).map((tx: any, i: number) => (
                         <tr key={i} className="hover:bg-white/5 transition-colors">
-                          <td className="px-4 py-3 whitespace-nowrap text-muted">{tx.date}</td>
-                          <td className="px-4 py-3 font-medium truncate max-w-[200px]">{tx.description}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-muted">{tx?.date}</td>
+                          <td className="px-4 py-3 font-medium truncate max-w-[200px]">{tx?.description}</td>
                           <td className="px-4 py-3">
                             <span className="px-2 py-0.5 rounded-full bg-white/5 text-[10px]">
-                              {tx.category}
+                              {tx?.category || 'other'}
                             </span>
                           </td>
-                          <td className={`px-4 py-3 text-right font-bold ${tx.type === 'debit' ? 'text-accent' : 'text-emerald-400'}`}>
-                            {tx.type === 'debit' ? '-' : '+'}{formatCurrency(tx.amount)}
+                          <td className={`px-4 py-3 text-right font-bold ${tx?.type === 'debit' ? 'text-accent' : 'text-emerald-400'}`}>
+                            {tx?.type === 'debit' ? '-' : '+'}{formatCurrency(tx?.amount || 0)}
                           </td>
                         </tr>
                       ))}
@@ -360,5 +386,13 @@ export default function StatementsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function StatementsPage() {
+  return (
+    <Suspense fallback={<div className="p-8 flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-accent" /></div>}>
+      <StatementsInner />
+    </Suspense>
   );
 }

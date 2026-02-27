@@ -54,7 +54,7 @@ The PDF file is attached. Please process it and provide the structured JSON outp
 
     // Create the task payload
     const taskPayload = {
-      instructions: taskInstructions,
+      prompt: taskInstructions,
       attachments: [
         {
           file_name: file.name,

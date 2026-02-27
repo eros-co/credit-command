@@ -301,19 +301,42 @@ export default function StatementsPage() {
 
       {/* Statement tabs */}
       {statements.length > 0 && (
-        <div className="flex gap-2 flex-wrap">
-          {statements.map(s => (
+        <div className="flex gap-2 flex-wrap items-center justify-between">
+          <div className="flex gap-2 flex-wrap">
+            {statements.map(s => (
+              <div key={s.id} className="relative group">
+                <button
+                  onClick={() => setSelected(s.id)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${selected === s.id ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
+                >
+                  {s.status === 'processing' && <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />}
+                  {s.status === 'completed' && <span>✓</span>}
+                  {s.status === 'error' && <span>✕</span>}
+                  <span className="truncate max-w-xs">{s.fileName}</span>
+                </button>
+                <button
+                  onClick={() => setStatements(prev => prev.filter(stmt => stmt.id !== s.id))}
+                  className="absolute -top-2 -right-2 w-5 h-5 bg-red-600 hover:bg-red-700 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Delete this statement"
+                >
+                  X
+                </button>
+              </div>
+            ))}
+          </div>
+          {statements.length > 0 && (
             <button
-              key={s.id}
-              onClick={() => setSelected(s.id)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${selected === s.id ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
+              onClick={() => {
+                if (confirm('Clear all statements? This cannot be undone.')) {
+                  setStatements([]);
+                  setSelected(null);
+                }
+              }}
+              className="px-3 py-1 text-xs bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg transition-colors border border-red-600/30"
             >
-              {s.status === 'processing' && <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />}
-              {s.status === 'completed' && <span>✓</span>}
-              {s.status === 'error' && <span>✕</span>}
-              <span className="truncate max-w-xs">{s.fileName}</span>
+              Clear All
             </button>
-          ))}
+          )}
         </div>
       )}
 

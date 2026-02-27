@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
 
     // Read the file as base64 for the API
     const fileBuffer = readFileSync(tmpFile);
-    const base64File = fileBuffer.toString('base64');
+    const base64File = `data:application/pdf;base64,${fileBuffer.toString('base64')}`;
     console.log(`[PDF Parser] File converted to base64 (${base64File.length} characters)`);
 
     // Create a Manus task to process the PDF
@@ -57,9 +57,8 @@ The PDF file is attached. Please process it and provide the structured JSON outp
       prompt: taskInstructions,
       attachments: [
         {
-          file_name: file.name,
-          file_data: base64File,
-          file_type: 'application/pdf'
+          filename: file.name,
+          fileData: base64File
         }
       ]
     };

@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { writeFileSync, unlinkSync } from 'fs';
+import { writeFileSync, unlinkSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { execSync } from 'child_process';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
+
+const MANUS_API_KEY = process.env.MANUS_API_KEY || 'sk-sinvDZ-cU0wfimql8b9qZl7DJkDgWtxnAk8wkU4daqQXU-Hr_JQTMLDjtSIKEY-yoqWiMtWoHHkyNGYQV9m6ScQZcF4k';
+const MANUS_API_URL = 'https://api.manus.ai/v1/tasks';
+const WEBHOOK_URL = process.env.WEBHOOK_URL || 'https://credit-command.vercel.app/api/manus-webhook';
 
 export async function POST(request: NextRequest) {
   const tmpFile = join(tmpdir(), `pdf_${Date.now()}_${Math.random().toString(36).slice(2)}.pdf`);
@@ -26,49 +29,75 @@ export async function POST(request: NextRequest) {
     const buffer = await file.arrayBuffer();
     writeFileSync(tmpFile, Buffer.from(buffer));
 
-    // Call the fnb-pdf-processor skill via Python script
-    const skillPath = '/home/ubuntu/skills/fnb-pdf-processor/scripts/process_fnb_pdf.py';
-    const command = `python3 ${skillPath} ${tmpFile}`;
+    // Read the file as base64 for the API
+    const fileBuffer = readFileSync(tmpFile);
+    const base64File = fileBuffer.toString('base64');
 
-    let output: string;
-    try {
-      output = execSync(command, {
-        encoding: 'utf-8',
-        maxBuffer: 10 * 1024 * 1024,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-    } catch (error: any) {
-      console.error('Skill execution error:', error.message);
+    // Create a Manus task to process the PDF
+    const taskInstructions = `You are an FNB (First National Bank) statement parser. I'm uploading an FNB Private Wealth bank statement PDF.
+
+Please:
+1. Extract all transaction data from the PDF
+2. Identify whether it's a Current Account or Credit Card statement
+3. Parse each transaction with: date, description, amount, type (debit/credit)
+4. Categorize transactions into: Food & Dining, Transport, Subscriptions, Fuel, Investments & Trading, Loan Repayments, Mobile & Data, Bank Charges, Utilities, Healthcare, Entertainment, Shopping, Insurance, Education, Salary/Income, Rent, Other
+5. Extract summary data: opening balance, closing balance, statement period, account number
+6. Return the complete parsed data as a JSON object
+
+The PDF file is attached. Please process it and provide the structured JSON output.`;
+
+    // Create the task payload
+    const taskPayload = {
+      instructions: taskInstructions,
+      attachments: [
+        {
+          file_name: file.name,
+          file_data: base64File,
+          file_type: 'application/pdf'
+        }
+      ]
+    };
+
+    // Call the Manus API to create a task
+    const response = await fetch(MANUS_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'API_KEY': MANUS_API_KEY
+      },
+      body: JSON.stringify(taskPayload)
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error('Manus API error:', error);
       return NextResponse.json(
-        { error: `Failed to parse PDF: ${error.message}` },
-        { status: 500 }
+        { 
+          error: 'Failed to create Manus task',
+          details: error,
+          status: response.status
+        },
+        { status: response.status }
       );
     }
 
-    // Parse the skill output
-    let result;
-    try {
-      result = JSON.parse(output);
-    } catch (parseError) {
-      console.error('Failed to parse skill output:', output);
-      return NextResponse.json(
-        { error: 'Failed to parse skill output' },
-        { status: 500 }
-      );
-    }
+    const taskData = await response.json();
 
-    if (!result.success) {
-      return NextResponse.json(
-        { error: result.error || 'Unknown error' },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json(result);
+    return NextResponse.json({
+      success: true,
+      message: 'PDF sent to Manus for processing',
+      taskId: taskData.id,
+      status: 'processing',
+      estimatedTime: '30-60 seconds',
+      taskUrl: taskData.task_url || `https://manus.im/app/${taskData.id}`
+    });
   } catch (error) {
-    console.error('API error:', error);
+    console.error('Error processing PDF:', error);
     return NextResponse.json(
-      { error: `Failed to parse PDF: ${error instanceof Error ? error.message : 'Unknown error'}` },
+      { 
+        error: 'Failed to process PDF',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     );
   } finally {

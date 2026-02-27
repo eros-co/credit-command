@@ -17,7 +17,6 @@ import {
   formatCurrency,
   getScoreColor,
 } from '@/lib/calculations';
-import { generateMonthlyReport } from '@/lib/ai-engine';
 import type { MonthlyReport } from '@/lib/types';
 
 export default function AIReportPage() {
@@ -43,22 +42,65 @@ export default function AIReportPage() {
 
   const currentMonth = new Date().toISOString().slice(0, 7);
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     setGenerating(true);
-    // Simulate AI processing delay
-    setTimeout(() => {
-      const report = generateMonthlyReport(
-        currentMonth,
-        settings,
-        snapshot,
-        creditScores,
-        transactions,
-        expenses
-      );
-      addMonthlyReport(report);
-      setSelectedReport(report);
+    try {
+      const res = await fetch('/api/generate-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          month: currentMonth,
+          settings,
+          snapshot,
+          creditScores,
+          transactions,
+          expenses
+        }),
+      });
+
+      const data = await res.json();
+      if (!data.success) {
+        console.error('Failed to start report generation:', data.error);
+        setGenerating(false);
+        return;
+      }
+
+      const taskId = data.taskId;
+      const interval = setInterval(async () => {
+        try {
+          const statusRes = await fetch(`/api/manus-task-status?taskId=${taskId}`);
+          const statusData = await statusRes.json();
+
+          if (statusData.status === 'completed' || statusData.status === 'success') {
+            clearInterval(interval);
+            let resultData = statusData.result;
+
+            if (typeof resultData === 'string') {
+              const cleaned = resultData.replace(/^```(?:json)?\s*\n?/gm, '').replace(/\n?```\s*$/gm, '').trim();
+              resultData = JSON.parse(cleaned);
+            }
+
+            // Ensure necessary fields are present
+            if (!resultData.id) resultData.id = crypto.randomUUID();
+            if (!resultData.month) resultData.month = currentMonth;
+
+            addMonthlyReport(resultData);
+            setSelectedReport(resultData);
+            setGenerating(false);
+          } else if (statusData.status === 'failed' || statusData.status === 'error') {
+            clearInterval(interval);
+            console.error('Report task failed:', statusData.error || statusData);
+            setGenerating(false);
+          }
+        } catch (err) {
+          console.error('Error polling status:', err);
+        }
+      }, 5000);
+
+    } catch (err) {
+      console.error('Error initiating report request:', err);
       setGenerating(false);
-    }, 1500);
+    }
   };
 
   const activeReport = selectedReport || (monthlyReports.length > 0 ? monthlyReports[0] : null);
@@ -99,11 +141,10 @@ export default function AIReportPage() {
             <button
               key={report.id}
               onClick={() => setSelectedReport(report)}
-              className={`px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${
-                activeReport?.id === report.id
-                  ? 'bg-accent/15 text-accent border border-accent/30'
-                  : 'bg-[#1a2332] text-muted border border-card-border hover:border-accent/30'
-              }`}
+              className={`px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${activeReport?.id === report.id
+                ? 'bg-accent/15 text-accent border border-accent/30'
+                : 'bg-[#1a2332] text-muted border border-card-border hover:border-accent/30'
+                }`}
             >
               {report.month}
             </button>
@@ -129,13 +170,12 @@ export default function AIReportPage() {
                 Score Change
               </div>
               <div
-                className={`text-4xl font-bold ${
-                  activeReport.scoreChange > 0
-                    ? 'text-emerald-400'
-                    : activeReport.scoreChange < 0
+                className={`text-4xl font-bold ${activeReport.scoreChange > 0
+                  ? 'text-emerald-400'
+                  : activeReport.scoreChange < 0
                     ? 'text-red-400'
                     : 'text-muted'
-                }`}
+                  }`}
               >
                 {activeReport.scoreChange > 0 ? '+' : ''}
                 {activeReport.scoreChange}

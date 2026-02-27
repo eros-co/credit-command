@@ -71,10 +71,10 @@ export default function SettingsPage() {
               <input
                 type="number"
                 value={form.debitBalance}
-                onChange={(e) =>
-                  setForm({ ...form, debitBalance: parseInt(e.target.value) || 0 })
-                }
-                min={0}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value);
+                  setForm({ ...form, debitBalance: isNaN(val) ? 0 : val });
+                }}
                 className="w-full"
               />
             </div>
@@ -85,10 +85,10 @@ export default function SettingsPage() {
               <input
                 type="number"
                 value={form.savingsBalance}
-                onChange={(e) =>
-                  setForm({ ...form, savingsBalance: parseInt(e.target.value) || 0 })
-                }
-                min={0}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value);
+                  setForm({ ...form, savingsBalance: isNaN(val) ? 0 : val });
+                }}
                 className="w-full"
               />
             </div>
@@ -99,10 +99,10 @@ export default function SettingsPage() {
               <input
                 type="number"
                 value={form.creditCardBalance}
-                onChange={(e) =>
-                  setForm({ ...form, creditCardBalance: parseInt(e.target.value) || 0 })
-                }
-                min={0}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value);
+                  setForm({ ...form, creditCardBalance: isNaN(val) ? 0 : val });
+                }}
                 className="w-full"
               />
             </div>

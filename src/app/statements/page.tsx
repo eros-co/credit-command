@@ -47,7 +47,7 @@ export default function StatementsPage() {
         const parsed = JSON.parse(stored) as UploadedStatement[];
         setStatements(parsed);
         if (parsed.length > 0) setSelected(parsed[0].id);
-        
+
         parsed.forEach(stmt => {
           if (stmt.status === 'processing' && stmt.taskId) {
             startPolling(stmt.id, stmt.taskId);
@@ -82,17 +82,17 @@ export default function StatementsPage() {
         // Fallback to direct task status check
         const res = await fetch(`/api/manus-task-status?taskId=${taskId}`);
         const data = await res.json();
-        
+
         if (data.status === 'completed' || data.status === 'success') {
           try {
             let resultData = data.result;
-            
+
             // If result is a string, strip markdown fences and parse
             if (typeof resultData === 'string') {
               const cleanedJson = stripMarkdownFences(resultData);
               resultData = JSON.parse(cleanedJson);
             }
-            
+
             handleCompletion(stmtId, resultData);
             clearInterval(interval);
             pollingRef.current.delete(stmtId);
@@ -116,9 +116,60 @@ export default function StatementsPage() {
     pollingRef.current.set(stmtId, interval);
   }, []);
 
-  const handleCompletion = (stmtId: string, parsed: any) => {
+  const handleCompletion = async (stmtId: string, parsed: any) => {
     setStatements(prev => prev.map(s => s.id === stmtId ? { ...s, status: 'completed', parsed } : s));
     syncStatementToStore(parsed);
+
+    // Automatically generate AI insights
+    try {
+      const store = useAppStore.getState();
+      const currentMonth = new Date().toISOString().slice(0, 7);
+
+      const res = await fetch('/api/generate-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          month: currentMonth,
+          settings: store.settings,
+          snapshot: { /* simplified snapshot or we can omit it since Manus has raw data */
+            ...store.settings,
+            currentScore: store.creditScores.length > 0 ? store.creditScores[store.creditScores.length - 1].score : store.settings.targetScore - 100
+          },
+          creditScores: store.creditScores,
+          transactions: store.transactions,
+          expenses: store.expenses
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.taskId) {
+        const taskId = data.taskId;
+        // Background poll for the AI report task
+        const reportInterval = setInterval(async () => {
+          try {
+            const statusRes = await fetch(`/api/manus-task-status?taskId=${taskId}`);
+            const statusData = await statusRes.json();
+
+            if (statusData.status === 'completed' || statusData.status === 'success') {
+              clearInterval(reportInterval);
+              let resultData = statusData.result;
+              if (typeof resultData === 'string') {
+                const cleaned = resultData.replace(/^```(?:json)?\s*\n?/gm, '').replace(/\n?```\s*$/gm, '').trim();
+                resultData = JSON.parse(cleaned);
+              }
+              if (!resultData.id) resultData.id = crypto.randomUUID();
+              if (!resultData.month) resultData.month = currentMonth;
+
+              store.addMonthlyReport(resultData);
+            } else if (statusData.status === 'failed' || statusData.status === 'error') {
+              clearInterval(reportInterval);
+            }
+          } catch (e) { }
+        }, 5000);
+      }
+    } catch (err) {
+      console.error('Failed to trigger background AI report generation', err);
+    }
   };
 
   const handleError = (stmtId: string, error: string) => {
@@ -136,7 +187,7 @@ export default function StatementsPage() {
         formData.append('file', file);
         const res = await fetch('/api/parse-statement', { method: 'POST', body: formData });
         const json = await res.json();
-        
+
         const stmtId = crypto.randomUUID();
         const stmt: UploadedStatement = {
           id: stmtId,
@@ -146,7 +197,7 @@ export default function StatementsPage() {
           error: json.success ? undefined : json.error,
           uploadedAt: Date.now(),
         };
-        
+
         setStatements(prev => [stmt, ...prev]);
         setSelected(stmtId);
         if (json.success && json.taskId) startPolling(stmtId, json.taskId);
@@ -170,7 +221,7 @@ export default function StatementsPage() {
           <h1 className="text-2xl font-bold">FNB Statement Command</h1>
           <p className="text-sm text-muted mt-1">Upload Current, Credit, or Savings PDFs for multi-account analysis</p>
         </div>
-        <button 
+        <button
           onClick={() => fileInputRef.current?.click()}
           className="btn-primary flex items-center gap-2"
           disabled={uploading}
@@ -178,11 +229,11 @@ export default function StatementsPage() {
           {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
           Upload Statements
         </button>
-        <input 
-          type="file" 
-          ref={fileInputRef} 
-          onChange={e => e.target.files && handleFiles(e.target.files)} 
-          className="hidden" 
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={e => e.target.files && handleFiles(e.target.files)}
+          className="hidden"
           accept=".pdf"
           multiple
         />
@@ -199,7 +250,7 @@ export default function StatementsPage() {
             </div>
           ) : (
             statements.map(stmt => (
-              <div 
+              <div
                 key={stmt.id}
                 onClick={() => setSelected(stmt.id)}
                 className={`card p-3 cursor-pointer transition-all border ${selected === stmt.id ? 'border-accent bg-accent/5' : 'border-white/5 hover:border-white/10'}`}
@@ -207,8 +258,8 @@ export default function StatementsPage() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
                     {stmt.status === 'completed' ? <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" /> :
-                     stmt.status === 'processing' ? <Loader2 className="w-4 h-4 text-accent animate-spin shrink-0" /> :
-                     <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />}
+                      stmt.status === 'processing' ? <Loader2 className="w-4 h-4 text-accent animate-spin shrink-0" /> :
+                        <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />}
                     <span className="text-xs font-medium truncate">{stmt.fileName}</span>
                   </div>
                   <button onClick={(e) => { e.stopPropagation(); deleteStatement(stmt.id); }} className="text-muted hover:text-red-400 transition-colors">

@@ -125,11 +125,11 @@ export function analyzePurchaseTimeline(
   const monthlyDisposable = settings.monthlyIncome - snapshot.totalMonthlySpending;
   const targetSavingsRate = 0.3; // Recommend saving 30% of disposable income
   const monthlySavingsAmount = Math.max(500, monthlyDisposable * targetSavingsRate);
-  
+
   let recommendation: PurchaseDecision['recommendation'] = 'buy_now';
   let monthsToSave = 0;
   let reasoning = "";
-  
+
   if (amount <= snapshot.totalCash * 0.15) {
     recommendation = 'buy_now';
     reasoning = `This purchase is well within your liquid cash reserves (R${snapshot.totalCash.toFixed(2)}). You can afford this without impacting your financial health.`;
@@ -171,10 +171,13 @@ export function analyzePurchaseTimeline(
 }
 
 export function formatCurrency(amount: number): string {
-  return `R${amount.toLocaleString('en-ZA', {
+  const isNegative = amount < 0;
+  const absAmount = Math.abs(amount);
+  const formatted = absAmount.toLocaleString('en-ZA', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  })}`;
+  });
+  return isNegative ? `-R${formatted}` : `R${formatted}`;
 }
 
 export function getUtilisationColor(ratio: number): string {

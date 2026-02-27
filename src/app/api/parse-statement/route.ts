@@ -81,12 +81,12 @@ Return the complete parsed data as a JSON object with this exact structure:
 }
 
 IMPORTANT: Provide ONLY the JSON object. No markdown code blocks, no preamble. Start with { and end with }.
-Use the 'gemini-2.5-flash' model for speed and efficiency.`;
+Use the Manus 1.6 Lite model for efficient PDF parsing.`;
 
-    // Create the task payload with credit-efficient model
+    // Create the task payload with Manus 1.6 Lite model
     const taskPayload = {
       prompt: taskInstructions,
-      model: 'gemini-2.5-flash',
+      model: 'manus',
       attachments: [
         {
           filename: file.name,

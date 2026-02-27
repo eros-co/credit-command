@@ -22,6 +22,15 @@ interface UploadedStatement {
 
 const STORAGE_KEY = 'credit-command-statements';
 
+// Utility to strip Markdown code fences from JSON strings
+function stripMarkdownFences(text: string): string {
+  // Remove markdown code fences (```json ... ``` or ``` ... ```)
+  return text
+    .replace(/^```(?:json)?\s*\n?/gm, '')
+    .replace(/\n?```\s*$/gm, '')
+    .trim();
+}
+
 export default function StatementsPage() {
   const [statements, setStatements] = useState<UploadedStatement[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
@@ -75,16 +84,33 @@ export default function StatementsPage() {
         const data = await res.json();
         
         if (data.status === 'completed' || data.status === 'success') {
-          const parsedData = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
-          handleCompletion(stmtId, parsedData);
-          clearInterval(interval);
-          pollingRef.current.delete(stmtId);
+          try {
+            let resultData = data.result;
+            
+            // If result is a string, strip markdown fences and parse
+            if (typeof resultData === 'string') {
+              const cleanedJson = stripMarkdownFences(resultData);
+              resultData = JSON.parse(cleanedJson);
+            }
+            
+            handleCompletion(stmtId, resultData);
+            clearInterval(interval);
+            pollingRef.current.delete(stmtId);
+          } catch (parseErr) {
+            console.error(`[Statements] JSON parse error for task ${taskId}:`, parseErr);
+            console.error(`[Statements] Raw result:`, data.result);
+            handleError(stmtId, `Failed to parse statement data: ${parseErr instanceof Error ? parseErr.message : 'Unknown error'}`);
+            clearInterval(interval);
+            pollingRef.current.delete(stmtId);
+          }
         } else if (data.status === 'failed' || data.status === 'error') {
           handleError(stmtId, data.error || 'Processing failed');
           clearInterval(interval);
           pollingRef.current.delete(stmtId);
         }
-      } catch (err) { console.error(err); }
+      } catch (err) {
+        console.error(`[Statements] Polling error for task ${taskId}:`, err);
+      }
     }, 5000);
 
     pollingRef.current.set(stmtId, interval);

@@ -47,8 +47,37 @@ Please:
 2. Identify whether it's a Current Account or Credit Card statement
 3. Parse each transaction with: date, description, amount, type (debit/credit)
 4. Categorize transactions into: Food & Dining, Transport, Subscriptions, Fuel, Investments & Trading, Loan Repayments, Mobile & Data, Bank Charges, Utilities, Healthcare, Entertainment, Shopping, Insurance, Education, Salary/Income, Rent, Other
-5. Extract summary data: opening balance, closing balance, statement period, account number
-6. Return the complete parsed data as a JSON object
+5. Extract summary data: opening balance, closing balance, statement period, account number, statement number, statement date
+6. For credit card statements, also extract: credit limit, available balance
+7. Return the complete parsed data as a JSON object with this exact structure:
+
+\`\`\`json
+{
+  "statementType": "current_account" or "credit_card",
+  "accountNumber": "string",
+  "statementNumber": "string",
+  "statementDate": "string",
+  "periodStart": "string",
+  "periodEnd": "string",
+  "openingBalance": number,
+  "closingBalance": number,
+  "totalDebits": number,
+  "totalCredits": number,
+  "creditLimit": number (optional, for credit cards),
+  "availableBalance": number (optional, for credit cards),
+  "transactions": [
+    {
+      "date": "string",
+      "description": "string",
+      "amount": number,
+      "type": "debit" or "credit",
+      "category": "string"
+    }
+  ]
+}
+\`\`\`
+
+IMPORTANT: At the very end of your response, output the complete JSON object (without markdown code blocks) so it can be easily extracted. Start with { and end with }.
 
 The PDF file is attached. Please process it and provide the structured JSON output.`;
 

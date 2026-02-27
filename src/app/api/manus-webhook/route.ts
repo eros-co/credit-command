@@ -3,61 +3,82 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    
-    // Manus webhook payload structure
-    const { event_type, task_detail, progress_detail } = body;
-    
-    // Only process task_stopped events (completed tasks)
-    if (event_type === 'task_stopped' && task_detail) {
-      const { task_id, message, attachments, stop_reason } = task_detail;
-      
-      // If the task completed successfully and has attachments (parsed data)
-      if (stop_reason === 'finish' && attachments && attachments.length > 0) {
-        // The parsed transaction data should be in the attachments
-        // For now, we'll log it and return success
-        console.log('✅ PDF Processing Complete:', {
-          taskId: task_id,
-          attachmentCount: attachments.length,
-          message
-        });
-        
-        // In a real scenario, you'd:
-        // 1. Download the attachment from the URL
-        // 2. Parse the JSON data
-        // 3. Store it in your database or state
-        // 4. Notify the frontend via WebSocket or polling
-        
-        return NextResponse.json({
-          success: true,
-          message: 'Webhook received and processed',
-          taskId: task_id,
-          attachments
-        });
+    console.log('[Webhook] Received event:', body.event_type);
+
+    // Handle task_stopped events (task completion)
+    if (body.event_type === 'task_stopped') {
+      const taskDetail = body.task_detail || {};
+      const taskId = taskDetail.task_id;
+      const message = taskDetail.message || '';
+      const stopReason = taskDetail.stop_reason;
+
+      console.log(`[Webhook] Task stopped: ${taskId}, reason: ${stopReason}`);
+
+      if (stopReason === 'finish') {
+        // Try to extract JSON from the message
+        let parsedResult = null;
+
+        // Look for JSON in the message
+        try {
+          // Try to find JSON object in the message
+          const jsonMatch = message.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            parsedResult = JSON.parse(jsonMatch[0]);
+            console.log('[Webhook] Successfully extracted JSON from message');
+          }
+        } catch (e) {
+          console.log('[Webhook] Could not parse JSON from message:', e);
+        }
+
+        // If we found a result, store it
+        if (parsedResult) {
+          try {
+            const storeRes = await fetch(
+              new URL('/api/statement-results', request.url),
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  taskId,
+                  result: parsedResult,
+                }),
+              }
+            );
+
+            if (storeRes.ok) {
+              console.log(`[Webhook] Successfully stored result for task: ${taskId}`);
+            } else {
+              console.error('[Webhook] Failed to store result:', await storeRes.text());
+            }
+          } catch (err) {
+            console.error('[Webhook] Error storing result:', err);
+          }
+        } else {
+          console.log('[Webhook] No parseable result found in message');
+        }
       }
-      
-      // If the task requires user input
-      if (stop_reason === 'ask') {
-        console.log('⚠️ Task requires user input:', message);
-        return NextResponse.json({
-          success: true,
-          message: 'Task requires user input',
-          taskId: task_id,
-          userMessage: message
-        });
-      }
+
+      return NextResponse.json({ success: true, received: true });
     }
-    
-    // Log other event types for debugging
-    console.log('📨 Webhook event received:', event_type);
-    
-    return NextResponse.json({
-      success: true,
-      message: 'Webhook received'
-    });
+
+    // Handle other event types
+    if (body.event_type === 'task_created') {
+      console.log(`[Webhook] Task created: ${body.task_detail?.task_id}`);
+      return NextResponse.json({ success: true, received: true });
+    }
+
+    if (body.event_type === 'task_progress') {
+      console.log(`[Webhook] Task progress: ${body.progress_detail?.message}`);
+      return NextResponse.json({ success: true, received: true });
+    }
+
+    console.log('[Webhook] Unknown event type:', body.event_type);
+    return NextResponse.json({ success: true, received: true });
   } catch (error) {
-    console.error('❌ Webhook error:', error);
+    console.error('[Webhook] Error processing webhook:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { error: 'Failed to process webhook' },
+      { error: `Failed to process webhook: ${errorMessage}`, success: false },
       { status: 500 }
     );
   }
